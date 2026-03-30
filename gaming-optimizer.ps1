@@ -321,9 +321,10 @@ function Draw-Frame() {
 # Uses cached WMI data passed from thread job.
 # FIX: loop up to ProcessorCount instead of hardcoded 16 for portability.
 function Calc-ZonePct($cpuRows, $mask) {
-    $threadCount = [System.Environment]::ProcessorCount
-    $vals = for ($i = 0; $i -lt $threadCount; $i++) {
-        if (([int64]$mask -band ([int64]1 -shl $i)) -ne 0 -and $i -lt $cpuRows.Count) {
+    # Iterate over actual rows, not ProcessorCount — WMI always returns one row
+    # per logical processor in production, and tests supply their own row count.
+    $vals = for ($i = 0; $i -lt $cpuRows.Count; $i++) {
+        if (([int64]$mask -band ([int64]1 -shl $i)) -ne 0) {
             [int]$cpuRows[$i].PercentProcessorTime
         }
     }
