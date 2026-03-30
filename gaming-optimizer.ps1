@@ -957,9 +957,13 @@ if (-not $script:trayMode) {
         [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null
     } catch {}
 
-    # System tray icon with context menu
+    # System tray icon with context menu.
+    # IMPORTANT: click handlers only set $script:trayAction — they never call
+    # script functions directly, which would re-enter the message loop and freeze.
+    # The main loop reads and dispatches $script:trayAction each tick.
     $script:trayIcon    = $null
     $script:trayPinItem = $null
+    $script:trayAction  = $null
     try {
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Drawing
@@ -972,41 +976,23 @@ if (-not $script:trayMode) {
 
         $ctx = New-Object System.Windows.Forms.ContextMenuStrip
 
-        # Header (non-clickable label)
         $hdr = $ctx.Items.Add("Gaming Optimizer v4")
         $hdr.Enabled = $false
         $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 
-        # Toggle CPU pinning
         $script:trayPinItem = $ctx.Items.Add("CPU Pinning: ON")
-        $script:trayPinItem.Add_Click({
-            $script:pinningEnabled = -not $script:pinningEnabled
-            if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
-            $script:trayPinItem.Text = "CPU Pinning: $(if ($script:pinningEnabled){'ON'}else{'OFF'})"
-        })
+        $script:trayPinItem.Add_Click({ $script:trayAction = 'togglepin' })
 
-        # Show current status as toast
         $statusItem = $ctx.Items.Add("Show Status")
-        $statusItem.Add_Click({
-            $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
-            $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
-            Send-Toast "Status: $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
-        })
+        $statusItem.Add_Click({ $script:trayAction = 'status' })
 
         $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 
-        # Exit
         $exitItem = $ctx.Items.Add("Exit")
-        $exitItem.Add_Click({ $script:exitRequested = $true })
+        $exitItem.Add_Click({ $script:trayAction = 'exit' })
 
         $script:trayIcon.ContextMenuStrip = $ctx
-
-        # Double-click also shows status
-        $script:trayIcon.add_DoubleClick({
-            $game = if ($script:currentGame) { $script:currentGame } else { "Idle - no game detected" }
-            $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
-            Send-Toast "Gaming Optimizer  |  $game  |  $pin"
-        })
+        $script:trayIcon.add_DoubleClick({ $script:trayAction = 'status' })
     } catch {
         $script:trayIcon = $null
     }
@@ -1127,10 +1113,26 @@ try {
                 }
             }
         } else {
-            # Tray mode: pump Windows messages so the NotifyIcon context menu responds
+            # Pump Windows messages so the NotifyIcon context menu responds
             try { [System.Windows.Forms.Application]::DoEvents() } catch {}
 
-            # Keep tooltip and pin-item label in sync with current state
+            # Dispatch any action set by a click handler (handlers never call
+            # functions directly — that would re-enter the message loop and freeze)
+            switch ($script:trayAction) {
+                'togglepin' {
+                    $script:pinningEnabled = -not $script:pinningEnabled
+                    if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+                }
+                'status' {
+                    $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
+                    $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
+                    Send-Toast "Gaming Optimizer  |  $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
+                }
+                'exit' { $script:exitRequested = $true }
+            }
+            $script:trayAction = $null
+
+            # Keep tooltip and pin-item label in sync
             if ($script:trayIcon) {
                 $tip = if ($script:currentGame) { "Gaming: $($script:currentGame)" } else { "Gaming Optimizer - Idle" }
                 if (-not $script:pinningEnabled) { $tip += " [PIN OFF]" }
