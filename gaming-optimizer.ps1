@@ -112,13 +112,23 @@ if ($Mode -eq "cleanup") {
         Write-Host "  [--] Named pass: all known processes already default (OK)" -ForegroundColor DarkGray
     }
 
-    # 5. Kill any orphaned thread jobs from a crashed session
-    $jobs = @(Get-Job -EA SilentlyContinue)
+    # 5. Kill orphaned ThreadJobs from a crashed session.
+    #    Only targets ThreadJob type — avoids nuking the user's unrelated
+    #    background jobs (weather fetch, OMP pre-warm, etc. from the profile).
+    $jobs = @(Get-Job -EA SilentlyContinue | Where-Object { $_.PSJobTypeName -eq 'ThreadJob' })
     if ($jobs.Count -gt 0) {
         $jobs | Remove-Job -Force -EA SilentlyContinue
-        Write-Host "  [OK] Removed $($jobs.Count) orphaned job(s)" -ForegroundColor Green
+        Write-Host "  [OK] Removed $($jobs.Count) orphaned ThreadJob(s)" -ForegroundColor Green
     } else {
-        Write-Host "  [--] No orphaned jobs (OK)" -ForegroundColor DarkGray
+        Write-Host "  [--] No orphaned ThreadJobs (OK)" -ForegroundColor DarkGray
+    }
+
+    # 6. Remove STOP sentinel file if it was left behind by a crash.
+    #    If present on next startup the optimizer would exit immediately.
+    $stopFile = Join-Path $PSScriptRoot "STOP"
+    if (Test-Path $stopFile) {
+        Remove-Item $stopFile -Force -EA SilentlyContinue
+        Write-Host "  [OK] Removed stale STOP sentinel file" -ForegroundColor Green
     }
 
     # 6. Reset console state in case script crashed mid-TUI
