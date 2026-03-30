@@ -1,0 +1,68 @@
+# gaming-optimizer configuration
+# Copy this file to config.psd1 (same directory) and edit as needed.
+# All keys are optional — omit any you want to keep at the default.
+#
+# To find your adapter name:  Get-NetAdapter | Select-Object Name, Status, LinkSpeed
+# To calculate affinity masks: each bit = one logical processor (thread).
+#   e.g. 0x0FFF = bits 0-11 = threads 0-11 (6 cores × 2 SMT) on a 16-thread CPU
+#
+# Rules for affinity masks:
+#   - GameAffinityMask, FirefoxAffinityMask, BgAffinityMask must be disjoint
+#   - Together they should cover all logical processors
+#   - All three must fit within [System.Environment]::ProcessorCount bits
+
+@{
+    # ── Network ───────────────────────────────────────────────────────────
+    # Name of the adapter to monitor for RX/TX graph.
+    # If not found at startup, the script auto-selects the fastest UP adapter.
+    NicName = "Ethernet 2"
+
+    # ── CPU Affinity Masks ────────────────────────────────────────────────
+    # Default layout for Ryzen 7 5800X3D (8c/16t):
+    #   Cores 0-5  → game zone   (threads 0-11,  mask 0x0FFF)
+    #   Core  6    → Firefox     (threads 12-13, mask 0x3000)
+    #   Core  7    → background  (threads 14-15, mask 0xC000)
+    #
+    # 8-thread example (4c/8t, e.g. Ryzen 5 3600):
+    #   GameAffinityMask    = 0x003F   # threads 0-5  (cores 0-2)
+    #   FirefoxAffinityMask = 0x00C0   # threads 6-7  (core 3)
+    #   BgAffinityMask      = 0x00C0   # same core — or leave Firefox/Bg unset
+    GameAffinityMask    = 0x0FFF
+    FirefoxAffinityMask = 0x3000
+    BgAffinityMask      = 0xC000
+
+    # ── Alert Thresholds ──────────────────────────────────────────────────
+    AlertGpuTempC       = 80    # °C   — GPU temperature alert
+    AlertVramPct        = 90    # %    — VRAM usage alert
+    AlertGpuUtilPct     = 95    # %    — GPU util alert (must hold for AlertSustainedTicks)
+    AlertCpuZonePct     = 90    # %    — game CPU zone alert
+    AlertSustainedTicks = 4     # ticks × 3 s ≈ 12 s sustained before alert fires
+
+    # ── Game Paths ────────────────────────────────────────────────────────
+    # Any process whose executable starts with one of these paths is treated
+    # as a game and pinned to GameAffinityMask with High priority.
+    GamePaths = @(
+        "C:\Program Files (x86)\Steam\steamapps\common"
+        "C:\Program Files\Steam\steamapps\common"
+        "C:\Program Files (x86)\GOG Galaxy\Games"
+        "C:\Program Files\GOG Galaxy\Games"
+        "C:\Program Files (x86)\Hearthstone"
+        "C:\Program Files (x86)\Overwatch"
+        "C:\Program Files (x86)\Overwatch\_retail_"
+        "C:\Program Files (x86)\World of Warcraft"
+        "C:\Program Files (x86)\Diablo IV"
+        "C:\Program Files\Epic Games"
+        # Add your own paths:
+        # "D:\Games"
+        # "E:\SteamLibrary\steamapps\common"
+    )
+
+    # ── Extra Background Processes to Throttle ────────────────────────────
+    # Names to ADD to the built-in throttle list (no .exe suffix, lowercase).
+    # Do not duplicate names already in the built-in list.
+    ExtraThrottledProcs = @(
+        # "dropbox"
+        # "googledrivefs"
+        # "crashplan"
+    )
+}

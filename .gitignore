@@ -1,3 +1,6 @@
+# Personal config (copy config.psd1.example → config.psd1 to customize)
+config.psd1
+
 # Session reports generated at runtime
 GamingOptimizer/
 *.log

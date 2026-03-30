@@ -731,6 +731,30 @@ function Update-Dashboard($gamePct, $ffPct, $bgPct, $gpu) {
     Write-At ($W - 14) $ROW_FOOTER $pinLabel $pinColor
 }
 
+# ---- CONFIG FILE (optional overrides) ----------------------
+# Copy config.psd1.example to config.psd1 and edit to customize.
+# All keys are optional; omitted keys keep their defaults above.
+$_cfgPath = if ($PSScriptRoot) { "$PSScriptRoot\config.psd1" } else { $null }
+if ($_cfgPath -and (Test-Path $_cfgPath)) {
+    try {
+        $cfg = Import-PowerShellDataFile $_cfgPath -EA Stop
+        if ($cfg.ContainsKey('NicName'))             { $NIC_NAME         = $cfg.NicName }
+        if ($cfg.ContainsKey('GameAffinityMask'))     { $GAME_AFFINITY    = [IntPtr]([int64]$cfg.GameAffinityMask) }
+        if ($cfg.ContainsKey('FirefoxAffinityMask'))  { $FIREFOX_AFFINITY = [IntPtr]([int64]$cfg.FirefoxAffinityMask) }
+        if ($cfg.ContainsKey('BgAffinityMask'))       { $BG_AFFINITY      = [IntPtr]([int64]$cfg.BgAffinityMask) }
+        if ($cfg.ContainsKey('AlertGpuTempC'))        { $ALERT_GPU_TEMP   = [int]$cfg.AlertGpuTempC }
+        if ($cfg.ContainsKey('AlertVramPct'))          { $ALERT_VRAM_PCT  = [int]$cfg.AlertVramPct }
+        if ($cfg.ContainsKey('AlertGpuUtilPct'))       { $ALERT_GPU_UTIL  = [int]$cfg.AlertGpuUtilPct }
+        if ($cfg.ContainsKey('AlertCpuZonePct'))       { $ALERT_CPU_GAME  = [int]$cfg.AlertCpuZonePct }
+        if ($cfg.ContainsKey('AlertSustainedTicks'))   { $SUSTAINED_TICKS = [int]$cfg.AlertSustainedTicks }
+        if ($cfg.ContainsKey('GamePaths'))             { $GAME_PATHS      = $cfg.GamePaths }
+        if ($cfg.ContainsKey('ExtraThrottledProcs'))   { $BG_PROCESSES    = $BG_PROCESSES + $cfg.ExtraThrottledProcs }
+    } catch {
+        Write-Warning "config.psd1 failed to load: $_"
+    }
+}
+Remove-Variable _cfgPath -EA SilentlyContinue
+
 # ---- STARTUP -----------------------------------------------
 $Host.UI.RawUI.WindowTitle = "Gaming Optimizer v4"
 [Console]::CursorVisible  = $false
@@ -787,14 +811,6 @@ Get-Job | Where-Object { $_.Name -like 'Job*' -or $_.PSJobTypeName -eq 'ThreadJo
 # runs in parallel with the remaining init steps instead of blocking the first loop tick
 $jWarmup = Start-ThreadJob { Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -EA SilentlyContinue | Out-Null }
 
-# Init network baseline
-try {
-    $s0 = Get-NetAdapterStatistics -Name $NIC_NAME -EA Stop
-    $script:netPrevRx   = $s0.ReceivedBytes
-    $script:netPrevTx   = $s0.SentBytes
-    $script:netPrevTime = [DateTime]::UtcNow
-} catch {}
-
 # Safety check: if a previous session crashed, PrioritySep might still be 26
 try {
     $stalePrio = (Get-ItemProperty $PRIO_SEP_KEY -EA Stop).Win32PrioritySeparation
@@ -807,6 +823,18 @@ try {
 Enable-GamingOptimizations
 
 AddLog "[INIT] v4 started — optimizations applied"
+
+# Validate affinity masks against actual thread count
+$_threads = [System.Environment]::ProcessorCount
+$_maxMaskBit = [math]::Max([math]::Max([int64]$GAME_AFFINITY, [int64]$FIREFOX_AFFINITY), [int64]$BG_AFFINITY)
+$_bitsNeeded = [math]::Ceiling([math]::Log($_maxMaskBit + 1, 2))
+if ($_bitsNeeded -gt $_threads) {
+    AddLog "[INIT] WARNING: affinity masks need $_bitsNeeded threads, CPU has $_threads — update config.psd1"
+} elseif ($_threads -ne 16) {
+    AddLog "[INIT] NOTE: running on $_threads-thread CPU (masks tuned for 16t) — verify zones in config.psd1"
+}
+Remove-Variable _threads, _maxMaskBit, _bitsNeeded -EA SilentlyContinue
+
 foreach ($p in $GAME_PATHS) {
     if (Test-Path $p) { AddLog "[INIT] OK: $(Split-Path $p -Leaf)" }
 }
@@ -816,8 +844,28 @@ if (Get-Command nvidia-smi -EA SilentlyContinue) {
     AddLog "[INIT] WARNING: nvidia-smi not in PATH — GPU panel will be empty"
 }
 if (-not (Get-NetAdapter -Name $NIC_NAME -EA SilentlyContinue)) {
-    AddLog "[INIT] WARNING: NIC '$NIC_NAME' not found — network graph disabled"
+    # Try to fall back to the first physical UP adapter, sorted by link speed
+    $_fallback = Get-NetAdapter -EA SilentlyContinue |
+        Where-Object { $_.Status -eq "Up" -and $_.InterfaceDescription -notmatch "Virtual|Loopback|Bluetooth|Wi-Fi Direct|TAP|VPN" } |
+        Sort-Object LinkSpeed -Descending |
+        Select-Object -First 1
+    if ($_fallback) {
+        $_prevName = $NIC_NAME
+        $NIC_NAME  = $_fallback.Name
+        AddLog "[INIT] NIC '$_prevName' not found — auto-selected '$NIC_NAME'"
+        Remove-Variable _fallback, _prevName -EA SilentlyContinue
+    } else {
+        AddLog "[INIT] WARNING: NIC '$NIC_NAME' not found and no fallback — network graph disabled"
+    }
 }
+# Init network baseline (done here so NIC auto-detection above can update $NIC_NAME first)
+try {
+    $s0 = Get-NetAdapterStatistics -Name $NIC_NAME -EA Stop
+    $script:netPrevRx   = $s0.ReceivedBytes
+    $script:netPrevTx   = $s0.SentBytes
+    $script:netPrevTime = [DateTime]::UtcNow
+} catch {}
+
 # ---- PRE-THROTTLE GAME SCAN ---------------------------------
 # Detect any games already running BEFORE ThrottleBg fires so they are
 # in $activeGames and get GAME_AFFINITY rather than sitting unprotected.

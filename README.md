@@ -2,7 +2,7 @@
 
 A real-time TUI (Terminal User Interface) for gaming performance optimization on Windows. Pins game processes to dedicated CPU cores, throttles background tasks, monitors GPU/CPU/network metrics, detects bottlenecks, and saves per-session stats — all from a single terminal window.
 
-![CI](https://github.com/YOUR_USERNAME/game-optimizer/actions/workflows/test.yml/badge.svg)
+![CI](https://github.com/maxrenke/game-optimizer/actions/workflows/test.yml/badge.svg)
 
 ---
 
@@ -158,6 +158,8 @@ pwsh -ExecutionPolicy Bypass -File full_test_pass.ps1
 GitHub Actions runs the **unit tests** on every push and pull request using a `windows-latest` runner. Integration tests are not run in CI because they require admin privileges, a real GPU, and live system services.
 
 See [`.github/workflows/test.yml`](.github/workflows/test.yml).
+
+Repo: https://github.com/maxrenke/game-optimizer
 
 ---
 
