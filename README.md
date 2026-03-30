@@ -38,14 +38,52 @@ The script was written for a **Ryzen 7 5800X3D / 8 c / 16 t** system with an **R
 
 ```powershell
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/game-optimizer.git
+git clone https://github.com/maxrenke/game-optimizer.git
 cd game-optimizer
 
-# 2. Launch as admin (right-click Terminal → "Run as Administrator")
+# 2. (Optional) run the setup wizard to generate config.psd1
+pwsh -ExecutionPolicy Bypass -File gaming-optimizer.ps1 -Mode configure
+
+# 3. Launch as admin (right-click Terminal → "Run as Administrator")
 pwsh -ExecutionPolicy Bypass -File gaming-optimizer.ps1
 ```
 
 The dashboard refreshes every ~3 seconds. Press **Q** to exit cleanly.
+
+### Install (recommended for regular use)
+
+```powershell
+# As Administrator — copies to AppData, creates desktop shortcuts,
+# registers a cleanup scheduled task for crash recovery
+pwsh -ExecutionPolicy Bypass -File Install.ps1
+
+# To uninstall
+pwsh -ExecutionPolicy Bypass -File Install.ps1 -Uninstall
+```
+
+### Modes
+
+| Mode | Command | What it does |
+|---|---|---|
+| **TUI** (default) | `gaming-optimizer.ps1` | Full real-time dashboard |
+| **Tray** | `-Mode tray` | Hides window, runs in background, Windows toast alerts only |
+| **Configure** | `-Mode configure` | Interactive wizard that writes `config.psd1` |
+| **Cleanup** | `-Mode cleanup` | Restores all system state (run after a crash) |
+
+### Tray mode
+
+Runs silently in the background — no TUI — and fires a Windows toast notification whenever an alert triggers (GPU overheating, VRAM full, etc.). Good for gaming sessions where you don't want a terminal on screen.
+
+```powershell
+# Start in background (window hides itself automatically)
+pwsh -ExecutionPolicy Bypass -File gaming-optimizer.ps1 -Mode tray
+
+# Stop cleanly: drop a STOP file next to the script
+New-Item "$env:LOCALAPPDATA\GamingOptimizer\STOP" -Force
+# Or: kill the pwsh process via Task Manager
+```
+
+The `Install.ps1` creates a **Gaming Optimizer (Tray)** desktop shortcut that does this in one click.
 
 ### Emergency cleanup
 
@@ -70,16 +108,24 @@ This resets Win32PrioritySeparation, re-enables SysMain, and releases all proces
 
 ## Configuration
 
-All configuration lives at the top of `gaming-optimizer.ps1`. The lines you are most likely to need to change:
+The easiest way to configure is the interactive wizard:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File gaming-optimizer.ps1 -Mode configure
+```
+
+This walks you through every setting and writes `config.psd1` next to the script. All keys are optional — omit any to keep the default.
+
+Alternatively, copy `config.psd1.example` to `config.psd1` and edit it manually.
 
 ### Network adapter name
 
 ```powershell
-# ~line 80 — change to match your adapter name exactly
-$ADAPTER_NAME = "Ethernet 2"   # Get-NetAdapter | Select-Object Name
+# In config.psd1:
+NicName = "Ethernet 2"   # Get-NetAdapter | Select-Object Name, Status
 ```
 
-Run `Get-NetAdapter | Select-Object Name` in PowerShell to find yours.
+Run `Get-NetAdapter | Select-Object Name` to find yours. If the name isn't found at startup the script auto-selects the fastest UP adapter and logs what it picked.
 
 ### CPU affinity masks
 

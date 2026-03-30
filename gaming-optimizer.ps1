@@ -102,6 +102,55 @@ $NORMAL    = [System.Diagnostics.ProcessPriorityClass]::Normal
 $BELOWNORM = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
 $ALL_CORES = [IntPtr](([int64]1 -shl [System.Environment]::ProcessorCount) - 1)
 
+# ---- GPU QUERY BLOCK ----------------------------------------
+# Self-contained scriptblock used inside a ThreadJob (no parent-scope
+# functions available). Tries NVIDIA → AMD rocm-smi → Windows WDDM
+# perf counters. All paths return the same hashtable shape; unavailable
+# fields are 0 so the dashboard handles them uniformly.
+$GpuQueryBlock = {
+    # ── NVIDIA via nvidia-smi ─────────────────────────────────
+    try {
+        $r = & nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw,power.limit,clocks.current.graphics,clocks.current.memory --format=csv,noheader,nounits 2>&1
+        $p = ($r -split ',') | ForEach-Object { $_.Trim() }
+        if ($p.Count -ge 9 -and $p[0] -match '^\d') {
+            return @{ Vendor='NVIDIA'; Temp=[int]$p[0]; GpuUtil=[int]$p[1]; MemUtil=[int]$p[2]
+                      MemUsedMB=[int]$p[3]; MemTotMB=[int]$p[4]
+                      PowerW=[math]::Round([double]$p[5],1); PowerLimW=[math]::Round([double]$p[6],0)
+                      ClkMhz=[int]$p[7]; MemClkMhz=[int]$p[8] }
+        }
+    } catch {}
+
+    # ── AMD via rocm-smi (ROCm toolkit — uncommon on gaming PCs) ─
+    try {
+        $r = & rocm-smi --showtemp --showuse --showmeminfo vram --json 2>&1 | ConvertFrom-Json -EA Stop
+        $card = ($r.PSObject.Properties | Select-Object -First 1).Value
+        if ($card) {
+            $usedB  = [double]($card.'VRAM Total Used Memory (B)')
+            $totalB = [double]($card.'VRAM Total Memory (B)')
+            return @{ Vendor='AMD'; Temp=[int]($card.'Temperature (Sensor junction) (C)')
+                      GpuUtil=[int]($card.'GPU use (%)'); MemUtil=0
+                      MemUsedMB=[int]($usedB/1MB); MemTotMB=[int]($totalB/1MB)
+                      PowerW=0; PowerLimW=0; ClkMhz=0; MemClkMhz=0 }
+        }
+    } catch {}
+
+    # ── Generic WDDM fallback (AMD/Intel without vendor tools) ───
+    # Utilization via Windows Performance Counters; VRAM total from registry.
+    try {
+        $samples = (Get-Counter '\GPU Engine(*enginetype_3d*)\Utilization Percentage' -EA Stop).CounterSamples
+        $gpuUtil = [int][math]::Min(100, ($samples | Measure-Object CookedValue -Maximum).Maximum)
+        $vramBytes = try {
+            $k = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000' -EA Stop
+            $k.GetValue('HardwareInformation.MemorySize')
+        } catch { 0 }
+        return @{ Vendor='Generic'; Temp=0; GpuUtil=$gpuUtil; MemUtil=0
+                  MemUsedMB=0; MemTotMB=[int]($vramBytes/1MB)
+                  PowerW=0; PowerLimW=0; ClkMhz=0; MemClkMhz=0 }
+    } catch {}
+
+    return $null
+}
+
 # ---- SYSTEM OPTIMIZATIONS ----------------------------------
 $NIC_NAME          = "Ethernet 2"          # used for network monitoring only
 $REPORT_DIR        = "$env:USERPROFILE\Documents\GamingOptimizer"
@@ -415,6 +464,20 @@ function AddLog($msg) {
     $ts = Get-Date -Format "HH:mm:ss"
     $script:log.Add("[$ts] $msg")
     if ($script:log.Count -gt 10) { $script:log.RemoveAt(0) }
+}
+
+# Sends a Windows toast notification (works without external modules on Windows 10+).
+# Used by tray mode for alerts; silently no-ops if WinRT is unavailable.
+function Send-Toast([string]$Body) {
+    try {
+        $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+        $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
+        $bodyEsc = $Body -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;'
+        $xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+        $xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>Gaming Optimizer</text><text>$bodyEsc</text></binding></visual></toast>")
+        $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+        [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Gaming Optimizer").Show($toast)
+    } catch {}
 }
 
 # ---- SYSTEM OPTIMIZATION ON/OFF ----------------------------
@@ -756,10 +819,93 @@ if ($_cfgPath -and (Test-Path $_cfgPath)) {
 }
 Remove-Variable _cfgPath -EA SilentlyContinue
 
+# ---- CONFIGURE MODE ----------------------------------------
+if ($Mode -eq "configure") {
+    Write-Host "`n  Gaming Optimizer — Configuration Wizard" -ForegroundColor Cyan
+    Write-Host "  Press Enter to keep the default shown in [brackets].`n" -ForegroundColor DarkGray
+
+    $c = [ordered]@{}
+
+    # NIC
+    Write-Host "Available network adapters (Up):" -ForegroundColor Yellow
+    Get-NetAdapter -EA SilentlyContinue | Where-Object Status -eq "Up" | ForEach-Object {
+        Write-Host "  $($_.Name)  —  $($_.InterfaceDescription)" -ForegroundColor DarkGray
+    }
+    $v = (Read-Host "`nNIC name [$NIC_NAME]").Trim()
+    $c.NicName = if ($v) { $v } else { $NIC_NAME }
+
+    # Affinity masks
+    Write-Host "`nThis CPU has $([System.Environment]::ProcessorCount) logical processors." -ForegroundColor Yellow
+    Write-Host "Affinity masks are hex bitmasks (e.g. 0x0FFF = threads 0-11)." -ForegroundColor DarkGray
+    foreach ($pair in @(
+        @{ Key='GameAffinityMask';    Label='Game affinity mask';       Val=$GAME_AFFINITY    },
+        @{ Key='FirefoxAffinityMask'; Label='Firefox affinity mask';    Val=$FIREFOX_AFFINITY },
+        @{ Key='BgAffinityMask';      Label='Background affinity mask'; Val=$BG_AFFINITY      }
+    )) {
+        $def = '0x{0:X}' -f [int64]$pair.Val
+        $v = (Read-Host "$($pair.Label) [$def]").Trim()
+        $c[$pair.Key] = if ($v) { [Convert]::ToInt64($v.TrimStart('0x').TrimStart('0X'), 16) } else { [int64]$pair.Val }
+    }
+
+    # Alert thresholds
+    Write-Host "`nAlert thresholds:" -ForegroundColor Yellow
+    foreach ($pair in @(
+        @{ Key='AlertGpuTempC';       Label='GPU temp alert (°C)';         Default=$ALERT_GPU_TEMP  },
+        @{ Key='AlertVramPct';        Label='VRAM alert (%)';              Default=$ALERT_VRAM_PCT  },
+        @{ Key='AlertGpuUtilPct';     Label='GPU util sustained alert (%)'; Default=$ALERT_GPU_UTIL  },
+        @{ Key='AlertCpuZonePct';     Label='Game CPU zone alert (%)';     Default=$ALERT_CPU_GAME  },
+        @{ Key='AlertSustainedTicks'; Label='Sustained ticks (×3 s)';      Default=$SUSTAINED_TICKS }
+    )) {
+        $v = (Read-Host "  $($pair.Label) [$($pair.Default)]").Trim()
+        $c[$pair.Key] = if ($v) { [int]$v } else { [int]$pair.Default }
+    }
+
+    # Game paths
+    Write-Host "`nGame library paths (current):" -ForegroundColor Yellow
+    $GAME_PATHS | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+    Write-Host "Add extra paths (empty line to finish):" -ForegroundColor DarkGray
+    $extra = [System.Collections.Generic.List[string]]::new()
+    while ($true) {
+        $v = (Read-Host "  Path").Trim()
+        if (-not $v) { break }
+        $extra.Add($v)
+    }
+    $c.GamePaths = if ($extra.Count -gt 0) { @($GAME_PATHS) + $extra.ToArray() } else { $GAME_PATHS }
+    $c.ExtraThrottledProcs = @()
+
+    # Write config.psd1
+    $out = [System.Collections.Generic.List[string]]::new()
+    $out.Add("# Gaming Optimizer config — generated $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
+    $out.Add("# Re-run with -Mode configure to update.`n")
+    $out.Add("@{")
+    $out.Add("    NicName             = '$($c.NicName)'")
+    $out.Add("    GameAffinityMask    = $('0x{0:X}' -f $c.GameAffinityMask)")
+    $out.Add("    FirefoxAffinityMask = $('0x{0:X}' -f $c.FirefoxAffinityMask)")
+    $out.Add("    BgAffinityMask      = $('0x{0:X}' -f $c.BgAffinityMask)")
+    $out.Add("    AlertGpuTempC       = $($c.AlertGpuTempC)")
+    $out.Add("    AlertVramPct        = $($c.AlertVramPct)")
+    $out.Add("    AlertGpuUtilPct     = $($c.AlertGpuUtilPct)")
+    $out.Add("    AlertCpuZonePct     = $($c.AlertCpuZonePct)")
+    $out.Add("    AlertSustainedTicks = $($c.AlertSustainedTicks)")
+    $out.Add("    GamePaths = @(")
+    foreach ($p in $c.GamePaths) { $out.Add("        `"$p`"") }
+    $out.Add("    )")
+    $out.Add("    ExtraThrottledProcs = @()")
+    $out.Add("}")
+    $cfgOut = "$PSScriptRoot\config.psd1"
+    $out | Set-Content $cfgOut -Encoding UTF8
+    Write-Host "`nSaved: $cfgOut" -ForegroundColor Green
+    exit
+}
+
+# ---- TRAY MODE FLAG ----------------------------------------
+# Set before STARTUP so conditional branches throughout the script can read it.
+$script:trayMode = ($Mode -eq "tray")
+
 # ---- STARTUP -----------------------------------------------
-$Host.UI.RawUI.WindowTitle = "Gaming Optimizer v4"
-[Console]::CursorVisible  = $false
+$Host.UI.RawUI.WindowTitle = "Gaming Optimizer v4$(if ($script:trayMode){' [tray]'})"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+if (-not $script:trayMode) { [Console]::CursorVisible = $false }
 
 # Outer guard: ensures cursor + title + all jobs are always restored even on startup crash
 trap {
@@ -789,21 +935,33 @@ trap {
     break
 }
 
-try {
-    $ui = $Host.UI.RawUI
-    $b  = $ui.BufferSize
-    if ($b.Width  -lt $W+2)            { $b.Width  = $W+2 }
-    if ($b.Height -lt $TOTAL_ROWS + 4) { $b.Height = $TOTAL_ROWS + 4 }
-    $ui.BufferSize = $b
-    $wn = $ui.WindowSize
-    if ($wn.Width  -lt $W+2)            { $wn.Width  = $W+2 }
-    if ($wn.Height -lt $TOTAL_ROWS + 2) { $wn.Height = $TOTAL_ROWS + 2 }
-    $ui.WindowSize = $wn
-} catch {}
+if (-not $script:trayMode) {
+    try {
+        $ui = $Host.UI.RawUI
+        $b  = $ui.BufferSize
+        if ($b.Width  -lt $W+2)            { $b.Width  = $W+2 }
+        if ($b.Height -lt $TOTAL_ROWS + 4) { $b.Height = $TOTAL_ROWS + 4 }
+        $ui.BufferSize = $b
+        $wn = $ui.WindowSize
+        if ($wn.Width  -lt $W+2)            { $wn.Width  = $W+2 }
+        if ($wn.Height -lt $TOTAL_ROWS + 2) { $wn.Height = $TOTAL_ROWS + 2 }
+        $ui.WindowSize = $wn
+    } catch {}
+} else {
+    # Tray mode: hide the console window so it runs silently in the background.
+    # The process stays alive; kill it via Task Manager or Stop-Process to exit.
+    # A file named STOP in the script directory will also trigger a clean exit.
+    try {
+        Add-Type -Name _CWin -Namespace GO -MemberDefinition '
+            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+            [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -EA Stop
+        [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null
+    } catch {}
+}
 
 if (-not (Test-Path $REPORT_DIR)) { New-Item -ItemType Directory -Path $REPORT_DIR -Force | Out-Null }
 
-Draw-Frame
+if (-not $script:trayMode) { Draw-Frame }
 
 # Clean up any orphaned jobs from a previous crashed session
 Get-Job | Where-Object { $_.Name -like 'Job*' -or $_.PSJobTypeName -eq 'ThreadJob' } | Remove-Job -Force -EA SilentlyContinue
@@ -839,11 +997,19 @@ Remove-Variable _threads, _maxMaskBit, _bitsNeeded -EA SilentlyContinue
 foreach ($p in $GAME_PATHS) {
     if (Test-Path $p) { AddLog "[INIT] OK: $(Split-Path $p -Leaf)" }
 }
+$_gpuVc = Get-CimInstance Win32_VideoController -EA SilentlyContinue |
+          Where-Object { $_.Name -notmatch "Microsoft Basic Display" } |
+          Select-Object -First 1
 if (Get-Command nvidia-smi -EA SilentlyContinue) {
-    AddLog "[INIT] nvidia-smi found — GPU monitoring active"
+    AddLog "[INIT] GPU: $($_gpuVc.Name) — nvidia-smi active"
+} elseif (Get-Command rocm-smi -EA SilentlyContinue) {
+    AddLog "[INIT] GPU: $($_gpuVc.Name) — rocm-smi active"
+} elseif ($_gpuVc) {
+    AddLog "[INIT] GPU: $($_gpuVc.Name) — WDDM perf counters (no vendor CLI)"
 } else {
-    AddLog "[INIT] WARNING: nvidia-smi not in PATH — GPU panel will be empty"
+    AddLog "[INIT] WARNING: no GPU detected — GPU panel disabled"
 }
+Remove-Variable _gpuVc -EA SilentlyContinue
 if (-not (Get-NetAdapter -Name $NIC_NAME -EA SilentlyContinue)) {
     # Try to fall back to the first physical UP adapter, sorted by link speed
     $_fallback = Get-NetAdapter -EA SilentlyContinue |
@@ -892,21 +1058,26 @@ try {
     while (-not $script:exitRequested) {
         $loopCount++
 
-        [Console]::TreatControlCAsInput = $true
-
-        while ([Console]::KeyAvailable) {
-            $key     = [Console]::ReadKey($true)
-            $isCtrlC = ($key.Key -eq [ConsoleKey]::C) -and ($key.Modifiers -band [ConsoleModifiers]::Control)
-            $isQ     = ($key.Key -eq [ConsoleKey]::Q)
-
-            if ($isCtrlC) {
-                $script:pinningEnabled = -not $script:pinningEnabled
-                if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
-            } elseif ($isQ) {
+        if (-not $script:trayMode) {
+            [Console]::TreatControlCAsInput = $true
+            while ([Console]::KeyAvailable) {
+                $key     = [Console]::ReadKey($true)
+                $isCtrlC = ($key.Key -eq [ConsoleKey]::C) -and ($key.Modifiers -band [ConsoleModifiers]::Control)
+                $isQ     = ($key.Key -eq [ConsoleKey]::Q)
+                if ($isCtrlC) {
+                    $script:pinningEnabled = -not $script:pinningEnabled
+                    if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+                } elseif ($isQ) {
+                    $script:exitRequested = $true
+                    while ([Console]::KeyAvailable) { [Console]::ReadKey($true) | Out-Null }
+                    break
+                }
+            }
+        } else {
+            # Tray mode: exit if a STOP sentinel file is placed next to the script
+            if (Test-Path "$PSScriptRoot\STOP") {
+                Remove-Item "$PSScriptRoot\STOP" -Force -EA SilentlyContinue
                 $script:exitRequested = $true
-                # Drain remaining keys so no stale input reaches the terminal after exit
-                while ([Console]::KeyAvailable) { [Console]::ReadKey($true) | Out-Null }
-                break
             }
         }
         if ($script:exitRequested) { break }
@@ -989,7 +1160,7 @@ try {
         $cpuData = $null; $gpuResult = $null; $netResult = $null
         try {
             $jCpu = Start-ThreadJob { Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -EA SilentlyContinue | Where-Object Name -ne "_Total" | Sort-Object { [int]$_.Name } }
-            $jGpu = Start-ThreadJob { try { $r = & nvidia-smi --query-gpu=temperature.gpu,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw,power.limit,clocks.current.graphics,clocks.current.memory --format=csv,noheader,nounits 2>&1; $p = ($r -split ",") | ForEach-Object { $_.Trim() }; if ($p.Count -ge 9) { @{ Temp=[int]$p[0]; GpuUtil=[int]$p[1]; MemUtil=[int]$p[2]; MemUsedMB=[int]$p[3]; MemTotMB=[int]$p[4]; PowerW=[math]::Round([double]$p[5],1); PowerLimW=[math]::Round([double]$p[6],0); ClkMhz=[int]$p[7]; MemClkMhz=[int]$p[8] } } } catch { $null } }
+            $jGpu = Start-ThreadJob { & $using:GpuQueryBlock }
             $jNet = Start-ThreadJob { param($nic) try { Get-NetAdapterStatistics -Name $nic -EA Stop } catch { $null } } -ArgumentList $NIC_NAME
             $jobs = @($jCpu, $jGpu, $jNet) | Where-Object { $_ -ne $null }
             $null = Wait-Job $jobs -Timeout 8
@@ -1030,9 +1201,10 @@ try {
         Check-Alerts $gamePct $gpu
         if ($script:alerts.Count -gt 0 -and $script:alerts.Count -ne $prevCount) {
             foreach ($a in $script:alerts) { AddLog $a }
+            if ($script:trayMode) { Send-Toast ($script:alerts -join "  |  ") }
         }
 
-        Update-Dashboard $gamePct $ffPct $bgPct $gpu
+        if (-not $script:trayMode) { Update-Dashboard $gamePct $ffPct $bgPct $gpu }
         Start-Sleep -Seconds 3
     }
 } finally {
@@ -1057,12 +1229,16 @@ try {
 
     $reportFile = Save-SessionReport
 
-    try { [Console]::TreatControlCAsInput = $false } catch {}
-    [Console]::CursorVisible = $true
-    [Console]::ResetColor()
-    [Console]::Clear()
-    $Host.UI.RawUI.WindowTitle = "PowerShell"
-    Write-Host "Gaming Optimizer stopped."
-    Write-Host "Session report saved to: $reportFile"
-    Start-Sleep -Seconds 2
+    if (-not $script:trayMode) {
+        try { [Console]::TreatControlCAsInput = $false } catch {}
+        [Console]::CursorVisible = $true
+        [Console]::ResetColor()
+        [Console]::Clear()
+        $Host.UI.RawUI.WindowTitle = "PowerShell"
+        Write-Host "Gaming Optimizer stopped."
+        Write-Host "Session report saved to: $reportFile"
+        Start-Sleep -Seconds 2
+    } else {
+        Send-Toast "Session ended. Report: $(Split-Path $reportFile -Leaf)"
+    }
 }
