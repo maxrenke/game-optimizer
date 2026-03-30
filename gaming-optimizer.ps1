@@ -949,14 +949,67 @@ if (-not $script:trayMode) {
     } catch {}
 } else {
     # Tray mode: hide the console window so it runs silently in the background.
-    # The process stays alive; kill it via Task Manager or Stop-Process to exit.
-    # A file named STOP in the script directory will also trigger a clean exit.
+    # The process stays alive; right-click the tray icon or place a STOP file to exit.
     try {
         Add-Type -Name _CWin -Namespace GO -MemberDefinition '
             [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
             [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -EA Stop
         [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null
     } catch {}
+
+    # System tray icon with context menu
+    $script:trayIcon    = $null
+    $script:trayPinItem = $null
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+
+        $script:trayIcon      = New-Object System.Windows.Forms.NotifyIcon
+        $script:trayIcon.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon(
+            (Get-Process -Id $PID).MainModule.FileName)
+        $script:trayIcon.Text    = "Gaming Optimizer - Idle"
+        $script:trayIcon.Visible = $true
+
+        $ctx = New-Object System.Windows.Forms.ContextMenuStrip
+
+        # Header (non-clickable label)
+        $hdr = $ctx.Items.Add("Gaming Optimizer v4")
+        $hdr.Enabled = $false
+        $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
+
+        # Toggle CPU pinning
+        $script:trayPinItem = $ctx.Items.Add("CPU Pinning: ON")
+        $script:trayPinItem.Add_Click({
+            $script:pinningEnabled = -not $script:pinningEnabled
+            if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+            $script:trayPinItem.Text = "CPU Pinning: $(if ($script:pinningEnabled){'ON'}else{'OFF'})"
+        })
+
+        # Show current status as toast
+        $statusItem = $ctx.Items.Add("Show Status")
+        $statusItem.Add_Click({
+            $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
+            $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
+            Send-Toast "Status: $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
+        })
+
+        $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
+
+        # Exit
+        $exitItem = $ctx.Items.Add("Exit")
+        $exitItem.Add_Click({ $script:exitRequested = $true })
+
+        $script:trayIcon.ContextMenuStrip = $ctx
+
+        # Double-click also shows status
+        $script:trayIcon.add_DoubleClick({
+            $game = if ($script:currentGame) { $script:currentGame } else { "Idle - no game detected" }
+            $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
+            Send-Toast "Gaming Optimizer  |  $game  |  $pin"
+        })
+    } catch {
+        $script:trayIcon = $null
+    }
 }
 
 if (-not (Test-Path $REPORT_DIR)) { New-Item -ItemType Directory -Path $REPORT_DIR -Force | Out-Null }
@@ -1074,7 +1127,20 @@ try {
                 }
             }
         } else {
-            # Tray mode: exit if a STOP sentinel file is placed next to the script
+            # Tray mode: pump Windows messages so the NotifyIcon context menu responds
+            try { [System.Windows.Forms.Application]::DoEvents() } catch {}
+
+            # Keep tooltip and pin-item label in sync with current state
+            if ($script:trayIcon) {
+                $tip = if ($script:currentGame) { "Gaming: $($script:currentGame)" } else { "Gaming Optimizer - Idle" }
+                if (-not $script:pinningEnabled) { $tip += " [PIN OFF]" }
+                $script:trayIcon.Text = $tip.Substring(0, [Math]::Min($tip.Length, 63))
+                if ($script:trayPinItem) {
+                    $script:trayPinItem.Text = "CPU Pinning: $(if ($script:pinningEnabled){'ON'}else{'OFF'})"
+                }
+            }
+
+            # STOP sentinel file for scripted / scheduled exit
             if (Test-Path "$PSScriptRoot\STOP") {
                 Remove-Item "$PSScriptRoot\STOP" -Force -EA SilentlyContinue
                 $script:exitRequested = $true
@@ -1205,7 +1271,18 @@ try {
         }
 
         if (-not $script:trayMode) { Update-Dashboard $gamePct $ffPct $bgPct $gpu }
-        Start-Sleep -Seconds 3
+
+        # In tray mode break the 3-second sleep into 100ms ticks so DoEvents keeps
+        # the NotifyIcon context menu and double-click responsive throughout the wait.
+        if ($script:trayMode) {
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($sw.ElapsedMilliseconds -lt 3000 -and -not $script:exitRequested) {
+                try { [System.Windows.Forms.Application]::DoEvents() } catch {}
+                Start-Sleep -Milliseconds 100
+            }
+        } else {
+            Start-Sleep -Seconds 3
+        }
     }
 } finally {
     End-GameSession
@@ -1239,6 +1316,12 @@ try {
         Write-Host "Session report saved to: $reportFile"
         Start-Sleep -Seconds 2
     } else {
+        # Hide and dispose the tray icon before sending the exit toast so it
+        # doesn't linger in the notification area after the process exits.
+        if ($script:trayIcon) {
+            try { $script:trayIcon.Visible = $false; $script:trayIcon.Dispose() } catch {}
+            $script:trayIcon = $null
+        }
         Send-Toast "Session ended. Report: $(Split-Path $reportFile -Leaf)"
     }
 }
