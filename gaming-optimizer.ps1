@@ -791,7 +791,7 @@ function Update-Dashboard($gamePct, $ffPct, $bgPct, $gpu) {
     $reportCount = if (Test-Path $REPORT_DIR) { (Get-ChildItem $REPORT_DIR -Filter "*.txt" -EA SilentlyContinue).Count } else { 0 }
     $pinLabel    = if ($script:pinningEnabled) { "[PIN ON ]" } else { "[PIN OFF]" }
     $pinColor    = if ($script:pinningEnabled) { [ConsoleColor]::Green } else { [ConsoleColor]::Yellow }
-    Write-At 2         $ROW_FOOTER "  Ctrl+C: toggle CPU pinning   Q: exit   Reports: $REPORT_DIR  ($reportCount sessions)".PadRight($IN) DarkGray
+    Write-At 2         $ROW_FOOTER "  Ctrl+C: toggle CPU pinning   T: hide to tray   Q: exit   Reports: $REPORT_DIR  ($reportCount sessions)".PadRight($IN) DarkGray
     Write-At ($W - 14) $ROW_FOOTER $pinLabel $pinColor
 }
 
@@ -935,41 +935,28 @@ trap {
     break
 }
 
-if (-not $script:trayMode) {
-    try {
-        $ui = $Host.UI.RawUI
-        $b  = $ui.BufferSize
-        if ($b.Width  -lt $W+2)            { $b.Width  = $W+2 }
-        if ($b.Height -lt $TOTAL_ROWS + 4) { $b.Height = $TOTAL_ROWS + 4 }
-        $ui.BufferSize = $b
-        $wn = $ui.WindowSize
-        if ($wn.Width  -lt $W+2)            { $wn.Width  = $W+2 }
-        if ($wn.Height -lt $TOTAL_ROWS + 2) { $wn.Height = $TOTAL_ROWS + 2 }
-        $ui.WindowSize = $wn
-    } catch {}
-} else {
-    # Tray mode: hide the console window so it runs silently in the background.
-    # The process stays alive; right-click the tray icon or place a STOP file to exit.
-    try {
-        Add-Type -Name _CWin -Namespace GO -MemberDefinition '
-            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-            [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -EA Stop
-        [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null
-    } catch {}
+# Always load ShowWindow so it's available for runtime tray↔window toggling.
+try {
+    Add-Type -Name _CWin -Namespace GO -MemberDefinition '
+        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+        [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -EA Stop
+} catch {}  # already defined on re-entry is fine
 
-    # System tray icon on a dedicated STA thread with its own Application.Run()
-    # message pump so it's always responsive regardless of what the main thread does.
-    # A synchronized hashtable is the only shared state between the two threads.
-    $script:trayComm = $null
-    $script:trayPs   = $null
+$script:trayComm = $null
+$script:trayPs   = $null
+
+# Starts (or re-uses) the STA tray runspace. Safe to call multiple times.
+function Start-TrayRunspace() {
+    if ($script:trayPs -and $script:trayPs.InvocationStateInfo.State -eq 'Running') { return }
     try {
         $script:trayComm = [hashtable]::Synchronized(@{
-            Action      = $null
-            PinEnabled  = $true
-            CurrentGame = $null
-            Exit        = $false
-            IconPath    = (Get-Process -Id $PID).MainModule.FileName
-            BalloonBody = $null   # main thread writes; tray timer shows + clears
+            Action        = $null
+            PinEnabled    = $script:pinningEnabled
+            CurrentGame   = $script:currentGame
+            WindowVisible = (-not $script:trayMode)  # true = TUI window open
+            Exit          = $false
+            IconPath      = (Get-Process -Id $PID).MainModule.FileName
+            BalloonBody   = $null
         })
 
         $trayScript = {
@@ -995,30 +982,33 @@ if (-not $script:trayMode) {
 
             $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 
+            # Show Window / Hide to Tray toggle — text updated by timer
+            $windowItem = $ctx.Items.Add("Show Window")
+            $windowItem.Add_Click({ $comm.Action = 'togglewindow' })
+
+            $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
+
             $exitItem = $ctx.Items.Add("Exit")
             $exitItem.Add_Click({ $comm.Action = 'exit'; $comm.Exit = $true })
 
             $icon.ContextMenuStrip = $ctx
-            $icon.add_DoubleClick({ $comm.Action = 'status' })
+            $icon.add_DoubleClick({ $comm.Action = 'togglewindow' })
 
-            # Timer syncs tooltip + pin label from main-thread state every second,
-            # and shows balloon tips written by the main thread to comm.BalloonBody.
             $timer          = New-Object System.Windows.Forms.Timer
             $timer.Interval = 1000
             $timer.Add_Tick({
                 $game = $comm.CurrentGame
                 $pin  = if ($comm.PinEnabled) { "PIN ON" } else { "PIN OFF" }
                 $tip  = if ($game) { "Gaming: $game | $pin" } else { "Idle | $pin" }
-                $icon.Text    = $tip.Substring(0, [Math]::Min($tip.Length, 63))
-                $pinItem.Text = "CPU Pinning: $(if ($comm.PinEnabled){'ON'}else{'OFF'})"
+                $icon.Text      = $tip.Substring(0, [Math]::Min($tip.Length, 63))
+                $pinItem.Text   = "CPU Pinning: $(if ($comm.PinEnabled){'ON'}else{'OFF'})"
+                $windowItem.Text = if ($comm.WindowVisible) { "Hide to Tray" } else { "Show Window" }
 
-                # Balloon tip queued by main thread (avoids WinRT AUMID requirement)
                 if ($comm.BalloonBody) {
                     $icon.ShowBalloonTip(4000, "Gaming Optimizer", $comm.BalloonBody,
                         [System.Windows.Forms.ToolTipIcon]::Info)
                     $comm.BalloonBody = $null
                 }
-
                 if ($comm.Exit) {
                     $timer.Stop()
                     $icon.Visible = $false
@@ -1030,11 +1020,11 @@ if (-not $script:trayMode) {
             [System.Windows.Forms.Application]::Run()
         }
 
-        $rs                  = [runspacefactory]::CreateRunspace()
-        $rs.ApartmentState   = 'STA'
-        $rs.ThreadOptions    = 'ReuseThread'
+        $rs                     = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState      = 'STA'
+        $rs.ThreadOptions       = 'ReuseThread'
         $rs.Open()
-        $script:trayPs       = [powershell]::Create()
+        $script:trayPs          = [powershell]::Create()
         $script:trayPs.Runspace = $rs
         $script:trayPs.AddScript($trayScript).AddArgument($script:trayComm) | Out-Null
         $script:trayPs.BeginInvoke() | Out-Null
@@ -1042,6 +1032,24 @@ if (-not $script:trayMode) {
         $script:trayComm = $null
         $script:trayPs   = $null
     }
+}
+
+if (-not $script:trayMode) {
+    try {
+        $ui = $Host.UI.RawUI
+        $b  = $ui.BufferSize
+        if ($b.Width  -lt $W+2)            { $b.Width  = $W+2 }
+        if ($b.Height -lt $TOTAL_ROWS + 4) { $b.Height = $TOTAL_ROWS + 4 }
+        $ui.BufferSize = $b
+        $wn = $ui.WindowSize
+        if ($wn.Width  -lt $W+2)            { $wn.Width  = $W+2 }
+        if ($wn.Height -lt $TOTAL_ROWS + 2) { $wn.Height = $TOTAL_ROWS + 2 }
+        $ui.WindowSize = $wn
+    } catch {}
+} else {
+    # Tray mode: hide console and start the tray icon runspace.
+    try { [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null } catch {}
+    Start-TrayRunspace
 }
 
 if (-not (Test-Path $REPORT_DIR)) { New-Item -ItemType Directory -Path $REPORT_DIR -Force | Out-Null }
@@ -1149,6 +1157,7 @@ try {
                 $key     = [Console]::ReadKey($true)
                 $isCtrlC = ($key.Key -eq [ConsoleKey]::C) -and ($key.Modifiers -band [ConsoleModifiers]::Control)
                 $isQ     = ($key.Key -eq [ConsoleKey]::Q)
+                $isT     = ($key.Key -eq [ConsoleKey]::T) -and (-not ($key.Modifiers -band [ConsoleModifiers]::Control))
                 if ($isCtrlC) {
                     $script:pinningEnabled = -not $script:pinningEnabled
                     if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
@@ -1156,6 +1165,13 @@ try {
                     $script:exitRequested = $true
                     while ([Console]::KeyAvailable) { [Console]::ReadKey($true) | Out-Null }
                     break
+                } elseif ($isT) {
+                    # Hide window and switch to tray mode
+                    Start-TrayRunspace
+                    $script:trayMode = $true
+                    [Console]::TreatControlCAsInput = $false
+                    try { [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null } catch {}
+                    if ($script:trayComm) { $script:trayComm.WindowVisible = $false }
                 }
             }
         } else {
@@ -1165,7 +1181,6 @@ try {
                     'togglepin' {
                         $script:pinningEnabled = -not $script:pinningEnabled
                         if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
-                        $script:trayComm.PinEnabled  = $script:pinningEnabled
                         $script:trayComm.BalloonBody = "CPU Pinning $(if ($script:pinningEnabled){'ENABLED'}else{'DISABLED'})"
                     }
                     'status' {
@@ -1173,11 +1188,18 @@ try {
                         $pin  = if ($script:pinningEnabled) { "Pinning ON" } else { "Pinning OFF" }
                         $script:trayComm.BalloonBody = "$game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
                     }
+                    'togglewindow' {
+                        $script:trayMode = $false
+                        try { [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 9) | Out-Null } catch {}
+                        [Console]::CursorVisible = $false
+                        Draw-Frame
+                    }
                     'exit' { $script:exitRequested = $true }
                 }
-                $script:trayComm.Action      = $null
-                $script:trayComm.PinEnabled  = $script:pinningEnabled
-                $script:trayComm.CurrentGame = $script:currentGame
+                $script:trayComm.Action        = $null
+                $script:trayComm.PinEnabled    = $script:pinningEnabled
+                $script:trayComm.CurrentGame   = $script:currentGame
+                $script:trayComm.WindowVisible = (-not $script:trayMode)
             }
 
             # STOP sentinel file for scripted / scheduled exit
