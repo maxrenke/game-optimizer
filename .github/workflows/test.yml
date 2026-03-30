@@ -15,8 +15,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0
+
       - name: Run unit tests
         shell: pwsh
         run: |
-          pwsh -ExecutionPolicy Bypass -File gaming-optimizer.tests.ps1
-          exit $LASTEXITCODE
+          $result = Invoke-Pester -Path gaming-optimizer.tests.ps1 -PassThru -OutputFormat NUnitXml -OutputFile TestResults.xml
+          exit $result.FailedCount
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: Unit Tests
+          path: TestResults.xml
+          reporter: java-junit
