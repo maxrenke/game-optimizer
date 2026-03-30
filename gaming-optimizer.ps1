@@ -396,7 +396,7 @@ function Get-ProcPath($proc) {
         # Only permanently blacklist the PID once the process has been running >5s.
         # Brand-new processes may not have a fully-loaded module list yet; retrying
         # them on the next tick is cheap and prevents missing short-lived game launches.
-        $ageMs = ((Get-Date) - $proc.StartTime).TotalMilliseconds
+        $ageMs = try { ((Get-Date) - $proc.StartTime).TotalMilliseconds } catch { 9999 }
         if ($ageMs -gt 5000) { $script:pathFailCache.Add($proc.Id) | Out-Null }
     }
     return $p
