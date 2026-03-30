@@ -648,4 +648,132 @@ Describe "gaming-optimizer.ps1" {
             (Draw-TempColor 100) | Should -Be ([ConsoleColor]::Red)
         }
     }
+
+    # =============================================================
+    #  11. GpuQueryBlock
+    # =============================================================
+    Context "GpuQueryBlock" {
+
+        It "is defined as a ScriptBlock" {
+            ($GpuQueryBlock -is [ScriptBlock]) | Should -BeTrue
+        }
+
+        It "contains NVIDIA nvidia-smi query" {
+            "$GpuQueryBlock" | Should -Match 'nvidia-smi'
+        }
+
+        It "contains AMD rocm-smi fallback" {
+            "$GpuQueryBlock" | Should -Match 'rocm-smi'
+        }
+
+        It "contains WDDM performance counter fallback" {
+            "$GpuQueryBlock" | Should -Match 'GPU Engine'
+        }
+
+        It "returns null when all vendors fail" {
+            "$GpuQueryBlock" | Should -Match 'return \$null'
+        }
+
+        It "NVIDIA path includes Vendor key" {
+            "$GpuQueryBlock" | Should -Match "Vendor='NVIDIA'"
+        }
+
+        It "AMD path includes Vendor key" {
+            "$GpuQueryBlock" | Should -Match "Vendor='AMD'"
+        }
+
+        It "Generic path includes Vendor key" {
+            "$GpuQueryBlock" | Should -Match "Vendor='Generic'"
+        }
+    }
+
+    # =============================================================
+    #  12. Send-Toast
+    # =============================================================
+    Context "Send-Toast" {
+
+        It "function is defined" {
+            (Get-Command Send-Toast -EA SilentlyContinue) | Should -Not -BeNullOrEmpty
+        }
+
+        It "does not throw with a normal message" {
+            { Send-Toast "GPU temp 85C — check cooling" } | Should -Not -Throw
+        }
+
+        It "does not throw with XML special characters (& < >)" {
+            # Body is XML-escaped internally; must not crash on these chars
+            { Send-Toast "VRAM 90% & rising <critical>" } | Should -Not -Throw
+        }
+
+        It "does not throw with empty string" {
+            { Send-Toast "" } | Should -Not -Throw
+        }
+    }
+
+    # =============================================================
+    #  13. Tray mode flag
+    # =============================================================
+    Context "Tray mode flag" {
+
+        It "trayMode is a boolean type" {
+            ($script:trayMode -is [bool]) | Should -BeTrue
+        }
+
+        It "trayMode defaults to false when Mode param is unset" {
+            # AST loader runs $script:trayMode = ($Mode -eq "tray") with $Mode = ""
+            $script:trayMode | Should -BeFalse
+        }
+    }
+
+    # =============================================================
+    #  14. Config file (config.psd1.example)
+    # =============================================================
+    Context "Config file" {
+
+        It "config.psd1.example exists in repo" {
+            (Test-Path "$PSScriptRoot\config.psd1.example") | Should -BeTrue
+        }
+
+        It "config.psd1.example is valid PowerShell data" {
+            { Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example" } | Should -Not -Throw
+        }
+
+        It "config.psd1.example contains NicName key" {
+            $cfg = Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example"
+            $cfg.ContainsKey('NicName') | Should -BeTrue
+        }
+
+        It "config.psd1.example contains all affinity mask keys" {
+            $cfg = Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example"
+            $cfg.ContainsKey('GameAffinityMask')    | Should -BeTrue
+            $cfg.ContainsKey('FirefoxAffinityMask') | Should -BeTrue
+            $cfg.ContainsKey('BgAffinityMask')      | Should -BeTrue
+        }
+
+        It "config.psd1.example contains all alert threshold keys" {
+            $cfg = Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example"
+            $cfg.ContainsKey('AlertGpuTempC')       | Should -BeTrue
+            $cfg.ContainsKey('AlertVramPct')        | Should -BeTrue
+            $cfg.ContainsKey('AlertGpuUtilPct')     | Should -BeTrue
+            $cfg.ContainsKey('AlertCpuZonePct')     | Should -BeTrue
+            $cfg.ContainsKey('AlertSustainedTicks') | Should -BeTrue
+        }
+
+        It "config.psd1.example contains GamePaths array" {
+            $cfg = Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example"
+            $cfg.ContainsKey('GamePaths') | Should -BeTrue
+            ($cfg.GamePaths -is [array])  | Should -BeTrue
+            $cfg.GamePaths.Count | Should -BeGreaterOrEqual 1
+        }
+
+        It "config.psd1.example contains ExtraThrottledProcs array" {
+            $cfg = Import-PowerShellDataFile "$PSScriptRoot\config.psd1.example"
+            $cfg.ContainsKey('ExtraThrottledProcs') | Should -BeTrue
+        }
+
+        It "GpuQueryBlock variable is not null after script load" {
+            # Verifies the constant was loaded by the AST mechanism
+            $GpuQueryBlock | Should -Not -BeNullOrEmpty
+        }
+    }
 }

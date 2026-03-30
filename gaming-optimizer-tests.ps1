@@ -100,31 +100,44 @@ foreach ($fn in @(
     'ApplyGame', 'ApplyFirefox',
     'Enable-GamingOptimizations', 'Disable-GamingOptimizations',
     'Save-SessionReport', 'End-GameSession', 'Start-GameSession',
-    'Update-Bottleneck', 'Check-Alerts', 'Update-Dashboard', 'AddLog'
+    'Update-Bottleneck', 'Check-Alerts', 'Update-Dashboard', 'AddLog',
+    'Send-Toast'
 )) {
     T "Function '$fn' defined" ($fnNames -contains $fn)
 }
 
-T "Bat file exists" (Test-Path $BAT_PATH)
+# Variable checks
+$varNames = $ast.FindAll(
+    { $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true
+) | ForEach-Object { $_.Left.VariablePath.UserPath } | Where-Object { $_ }
+
+T "GpuQueryBlock variable defined"   ($varNames -contains 'GpuQueryBlock')
+T "script:trayMode variable defined" ($src -match '\$script:trayMode')
+
+T "Bat file exists" (Test-Path $BAT_PATH) -WarnOnly
 
 
 # ============================================================
-# SECTION 2 — BAT FILE
+# SECTION 2 — BAT FILE (legacy — skipped if absent)
 # ============================================================
 Section "2. BAT FILE"
 
-$bat = Get-Content $BAT_PATH -Raw -EA SilentlyContinue
-T "Bat uses pwsh (not legacy powershell.exe)" (
-    $bat -match 'pwsh' -and $bat -notmatch '(?<![a-z])powershell\s'
-)
-T "Bat points to correct script path" (
-    $bat -match [regex]::Escape('%USERPROFILE%\gaming-optimizer.ps1')
-)
-T "Bat has -cleanup shortcut"    ($bat -match '-cleanup')
-T "Bat elevation uses pwsh"      ($bat -match 'pwsh.*RunAs')
-T "Bat does NOT reference Desktop path" (
-    $bat -notmatch [regex]::Escape('\Desktop\gaming-optimizer')
-)
+if (-not (Test-Path $BAT_PATH)) {
+    T "Bat file not present (replaced by Install.ps1 shortcuts — skipping section)" $true -WarnOnly
+} else {
+    $bat = Get-Content $BAT_PATH -Raw -EA SilentlyContinue
+    T "Bat uses pwsh (not legacy powershell.exe)" (
+        $bat -match 'pwsh' -and $bat -notmatch '(?<![a-z])powershell\s'
+    )
+    T "Bat points to correct script path" (
+        $bat -match [regex]::Escape('%USERPROFILE%\gaming-optimizer.ps1')
+    )
+    T "Bat has -cleanup shortcut"    ($bat -match '-cleanup')
+    T "Bat elevation uses pwsh"      ($bat -match 'pwsh.*RunAs')
+    T "Bat does NOT reference Desktop path" (
+        $bat -notmatch [regex]::Escape('\Desktop\gaming-optimizer')
+    )
+}
 
 
 # ============================================================
@@ -427,6 +440,178 @@ if (Test-Path $unitTestPath) {
     T "Unit test suite exits with code 0"      ($LASTEXITCODE -eq 0)
     T "Unit test suite reports 0 failures"     ($utFail -eq 0)
 }
+
+
+# ============================================================
+# SECTION 16 — GPU ABSTRACTION (static analysis)
+# ============================================================
+Section "16. GPU ABSTRACTION (static analysis)"
+
+T "GpuQueryBlock is assigned a ScriptBlock literal" (
+    $src -match '\$GpuQueryBlock\s*=\s*\{'
+)
+T "GpuQueryBlock contains nvidia-smi path" (
+    $src -match 'nvidia-smi'
+)
+T "GpuQueryBlock contains AMD fallback (rocm-smi or GPU Engine counter)" (
+    $src -match 'rocm-smi' -or $src -match 'GPU Engine'
+)
+T "GpuQueryBlock returns \$null as final fallback" (
+    # The null return should be inside the GpuQueryBlock scriptblock
+    ($src -split '\$GpuQueryBlock\s*=\s*\{')[1] -split '^\}' | Select-Object -First 1 |
+        ForEach-Object { $_ -match 'return \$null' }
+)
+T "Thread job uses \$using:GpuQueryBlock (not inline scriptblock)" (
+    $src -match 'Start-ThreadJob\s*\{[^}]*\$using:GpuQueryBlock'
+)
+T "GpuQueryBlock result has Vendor key" (
+    $src -match "Vendor\s*=\s*'(NVIDIA|AMD|Generic)'"
+)
+T "GpuQueryBlock result has UtilPct key" (
+    $src -match "UtilPct\s*="
+)
+T "GpuQueryBlock result has TempC key" (
+    $src -match "TempC\s*="
+)
+
+
+# ============================================================
+# SECTION 17 — TRAY MODE (static analysis)
+# ============================================================
+Section "17. TRAY MODE (static analysis)"
+
+T "trayMode flag set from -Mode tray parameter" (
+    $src -match "\`$script:trayMode\s*=\s*\(\`$Mode\s*-eq\s*['""]tray['""]\)"
+)
+T "Draw-Frame wrapped in 'if (-not trayMode)'" (
+    $src -match 'if\s*\(-not\s*\$script:trayMode\s*\).*\{[^}]*Draw-Frame'  -or
+    $src -match 'if\s*\(-not\s*\$script:trayMode\s*\)\s*\{\s*Draw-Frame'
+)
+T "Key handler wrapped in 'if (-not trayMode)'" (
+    $src -match 'if\s*\(-not\s*\$script:trayMode\s*\).*KeyAvailable' -or
+    ($src -match 'if\s*\(-not\s*\$script:trayMode\s*\)' -and $src -match 'KeyAvailable')
+)
+T "STOP file checked for tray exit" (
+    $src -match 'STOP' -and $src -match 'trayMode'
+)
+T "Send-Toast called when new alerts fire in tray mode" (
+    $src -match 'trayMode.*Send-Toast|Send-Toast.*alerts'
+)
+T "Update-Dashboard skipped in tray mode" (
+    $src -match "if\s*\(-not\s*\$script:trayMode\s*\)\s*\{\s*Update-Dashboard"
+)
+T "Console window hidden via ShowWindow in tray mode" (
+    $src -match 'ShowWindow' -and $src -match 'trayMode'
+)
+T "Finally block has tray-mode conditional (no CursorVisible spam in tray)" (
+    (Get-FinallyBlock $src) -match 'trayMode'
+)
+
+
+# ============================================================
+# SECTION 18 — CONFIGURE MODE (static analysis)
+# ============================================================
+Section "18. CONFIGURE MODE (static analysis)"
+
+T "-Mode parameter declared in param() block" (
+    $src -match 'param\s*\([^)]*\[string\]\$Mode'
+)
+T "configure block present before STARTUP marker" (
+    # configure block should appear before the main try{} loop
+    ($src -split 'if\s*\(\$Mode\s*-eq\s*[''"]configure')[1] -notmatch '# -{3,} STARTUP'
+)
+T "Configure mode prompts for NicName" (
+    $src -match "configure.*NicName|NicName.*configure" -or
+    ($src -split 'Mode.*configure')[1] -match 'NicName'
+)
+T "Configure mode writes config.psd1" (
+    $src -match "config\.psd1"
+)
+T "Configure mode writes NicName key" (
+    ($src -split 'Mode.*configure' | Select-Object -Last 1) -match "NicName"
+)
+T "Configure mode writes ExtraThrottledProcs key" (
+    ($src -split 'Mode.*configure' | Select-Object -Last 1) -match "ExtraThrottledProcs"
+)
+T "Configure mode exits after writing config (does not fall through to main loop)" (
+    ($src -split 'Mode.*configure' | Select-Object -Last 1) -match '\bexit\b|\breturn\b'
+)
+
+
+# ============================================================
+# SECTION 19 — INSTALLER SCRIPT (static analysis)
+# ============================================================
+Section "19. INSTALLER SCRIPT (static analysis)"
+
+$installPath = "$PSScriptRoot\Install.ps1"
+T "Install.ps1 exists" (Test-Path $installPath)
+
+if (Test-Path $installPath) {
+    $instErrors = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseFile($installPath, [ref]$null, [ref]$instErrors)
+    T "Install.ps1 parses without errors" ($instErrors.Count -eq 0)
+
+    $instSrc = Get-Content $installPath -Raw -Encoding UTF8
+    T "Install.ps1 has -Uninstall switch" (
+        $instSrc -match 'param\s*\([^)]*\[switch\]\$Uninstall'
+    )
+    T "Install.ps1 copies script to AppData (not hardcoded user path)" (
+        $instSrc -match 'LOCALAPPDATA' -and $instSrc -notmatch [regex]::Escape('C:\Users\')
+    )
+    T "Install.ps1 creates TUI desktop shortcut" (
+        $instSrc -match 'Gaming Optimizer\.lnk'
+    )
+    T "Install.ps1 creates tray desktop shortcut" (
+        $instSrc -match 'Gaming Optimizer \(Tray\)\.lnk'
+    )
+    T "Install.ps1 registers scheduled task for cleanup-on-logon" (
+        $instSrc -match 'Register-ScheduledTask' -and $instSrc -match '-Mode cleanup'
+    )
+    T "Install.ps1 unregister path removes scheduled task" (
+        $instSrc -match 'Unregister-ScheduledTask'
+    )
+    T "Shortcuts set RunAsAdministrator bit (byte 0x15 manipulation)" (
+        $instSrc -match '0x15.*0x20|0x20.*0x15'
+    )
+}
+
+
+# ============================================================
+# SECTION 20 — CONFIG FILE LOADING (static analysis)
+# ============================================================
+Section "20. CONFIG FILE LOADING (static analysis)"
+
+T "config.psd1.example exists in repo" (
+    Test-Path "$PSScriptRoot\config.psd1.example"
+)
+
+if (Test-Path "$PSScriptRoot\config.psd1.example") {
+    $exampleErrors = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseFile(
+        "$PSScriptRoot\config.psd1.example", [ref]$null, [ref]$exampleErrors)
+    T "config.psd1.example parses without errors" ($exampleErrors.Count -eq 0)
+}
+
+T "Config loading uses Import-PowerShellDataFile" (
+    $src -match 'Import-PowerShellDataFile'
+)
+T "Config loading wrapped in try/catch (bad config does not crash startup)" (
+    # find the config loading block and check it has error handling
+    $src -match '(?s)Import-PowerShellDataFile.*catch'
+)
+T "NicName override applied from config" (
+    $src -match "cfg\.ContainsKey.*NicName.*NIC_NAME|NIC_NAME.*cfg\.NicName"  -or
+    $src -match "\`$NIC_NAME\s*=\s*\`$cfg\.NicName"
+)
+T "ExtraThrottledProcs appends to BG_PROCESSES (not replaces)" (
+    $src -match "BG_PROCESSES\s*\+\s*\`$cfg\.ExtraThrottledProcs|\`$BG_PROCESSES.*\+.*ExtraThrottledProcs"
+)
+T "Alert threshold overrides present (ALERT_GPU_TEMP)" (
+    $src -match 'cfg.*ALERT_GPU_TEMP|ALERT_GPU_TEMP.*cfg'
+)
+T "Affinity mask overrides present (GAME_MASK)" (
+    $src -match 'cfg.*GAME_MASK|GAME_MASK.*cfg'
+)
 
 
 # ============================================================
