@@ -969,6 +969,7 @@ if (-not $script:trayMode) {
             CurrentGame = $null
             Exit        = $false
             IconPath    = (Get-Process -Id $PID).MainModule.FileName
+            BalloonBody = $null   # main thread writes; tray timer shows + clears
         })
 
         $trayScript = {
@@ -1000,15 +1001,24 @@ if (-not $script:trayMode) {
             $icon.ContextMenuStrip = $ctx
             $icon.add_DoubleClick({ $comm.Action = 'status' })
 
-            # Timer syncs tooltip + pin label from main-thread state every second
+            # Timer syncs tooltip + pin label from main-thread state every second,
+            # and shows balloon tips written by the main thread to comm.BalloonBody.
             $timer          = New-Object System.Windows.Forms.Timer
             $timer.Interval = 1000
             $timer.Add_Tick({
                 $game = $comm.CurrentGame
-                $tip  = if ($game) { "Gaming: $game" } else { "Gaming Optimizer - Idle" }
-                if (-not $comm.PinEnabled) { $tip += " [PIN OFF]" }
+                $pin  = if ($comm.PinEnabled) { "PIN ON" } else { "PIN OFF" }
+                $tip  = if ($game) { "Gaming: $game | $pin" } else { "Idle | $pin" }
                 $icon.Text    = $tip.Substring(0, [Math]::Min($tip.Length, 63))
                 $pinItem.Text = "CPU Pinning: $(if ($comm.PinEnabled){'ON'}else{'OFF'})"
+
+                # Balloon tip queued by main thread (avoids WinRT AUMID requirement)
+                if ($comm.BalloonBody) {
+                    $icon.ShowBalloonTip(4000, "Gaming Optimizer", $comm.BalloonBody,
+                        [System.Windows.Forms.ToolTipIcon]::Info)
+                    $comm.BalloonBody = $null
+                }
+
                 if ($comm.Exit) {
                     $timer.Stop()
                     $icon.Visible = $false
@@ -1155,11 +1165,13 @@ try {
                     'togglepin' {
                         $script:pinningEnabled = -not $script:pinningEnabled
                         if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+                        $script:trayComm.PinEnabled  = $script:pinningEnabled
+                        $script:trayComm.BalloonBody = "CPU Pinning $(if ($script:pinningEnabled){'ENABLED'}else{'DISABLED'})"
                     }
                     'status' {
                         $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
-                        $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
-                        Send-Toast "Gaming Optimizer  |  $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
+                        $pin  = if ($script:pinningEnabled) { "Pinning ON" } else { "Pinning OFF" }
+                        $script:trayComm.BalloonBody = "$game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
                     }
                     'exit' { $script:exitRequested = $true }
                 }
@@ -1300,7 +1312,7 @@ try {
 
         if (-not $script:trayMode) { Update-Dashboard $gamePct $ffPct $bgPct $gpu }
 
-        Start-Sleep -Seconds 3
+        Start-Sleep -Seconds $(if ($script:trayMode) { 1 } else { 3 })
     }
 } finally {
     End-GameSession
