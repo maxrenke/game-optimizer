@@ -1,0 +1,13 @@
+# Session reports generated at runtime
+GamingOptimizer/
+*.log
+
+# PowerShell history and editor noise
+*.pssc
+.vs/
+.vscode/settings.json
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
