@@ -957,44 +957,80 @@ if (-not $script:trayMode) {
         [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 0) | Out-Null
     } catch {}
 
-    # System tray icon with context menu.
-    # IMPORTANT: click handlers only set $script:trayAction — they never call
-    # script functions directly, which would re-enter the message loop and freeze.
-    # The main loop reads and dispatches $script:trayAction each tick.
-    $script:trayIcon    = $null
-    $script:trayPinItem = $null
-    $script:trayAction  = $null
+    # System tray icon on a dedicated STA thread with its own Application.Run()
+    # message pump so it's always responsive regardless of what the main thread does.
+    # A synchronized hashtable is the only shared state between the two threads.
+    $script:trayComm = $null
+    $script:trayPs   = $null
     try {
-        Add-Type -AssemblyName System.Windows.Forms
-        Add-Type -AssemblyName System.Drawing
+        $script:trayComm = [hashtable]::Synchronized(@{
+            Action      = $null
+            PinEnabled  = $true
+            CurrentGame = $null
+            Exit        = $false
+            IconPath    = (Get-Process -Id $PID).MainModule.FileName
+        })
 
-        $script:trayIcon      = New-Object System.Windows.Forms.NotifyIcon
-        $script:trayIcon.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon(
-            (Get-Process -Id $PID).MainModule.FileName)
-        $script:trayIcon.Text    = "Gaming Optimizer - Idle"
-        $script:trayIcon.Visible = $true
+        $trayScript = {
+            param($comm)
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
 
-        $ctx = New-Object System.Windows.Forms.ContextMenuStrip
+            $icon         = New-Object System.Windows.Forms.NotifyIcon
+            $icon.Icon    = [System.Drawing.Icon]::ExtractAssociatedIcon($comm.IconPath)
+            $icon.Text    = "Gaming Optimizer - Idle"
+            $icon.Visible = $true
 
-        $hdr = $ctx.Items.Add("Gaming Optimizer v4")
-        $hdr.Enabled = $false
-        $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
+            $ctx = New-Object System.Windows.Forms.ContextMenuStrip
+            $hdr = $ctx.Items.Add("Gaming Optimizer v4")
+            $hdr.Enabled = $false
+            $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 
-        $script:trayPinItem = $ctx.Items.Add("CPU Pinning: ON")
-        $script:trayPinItem.Add_Click({ $script:trayAction = 'togglepin' })
+            $pinItem = $ctx.Items.Add("CPU Pinning: ON")
+            $pinItem.Add_Click({ $comm.Action = 'togglepin' })
 
-        $statusItem = $ctx.Items.Add("Show Status")
-        $statusItem.Add_Click({ $script:trayAction = 'status' })
+            $statusItem = $ctx.Items.Add("Show Status")
+            $statusItem.Add_Click({ $comm.Action = 'status' })
 
-        $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
+            $ctx.Items.Add([System.Windows.Forms.ToolStripSeparator]::new()) | Out-Null
 
-        $exitItem = $ctx.Items.Add("Exit")
-        $exitItem.Add_Click({ $script:trayAction = 'exit' })
+            $exitItem = $ctx.Items.Add("Exit")
+            $exitItem.Add_Click({ $comm.Action = 'exit'; $comm.Exit = $true })
 
-        $script:trayIcon.ContextMenuStrip = $ctx
-        $script:trayIcon.add_DoubleClick({ $script:trayAction = 'status' })
+            $icon.ContextMenuStrip = $ctx
+            $icon.add_DoubleClick({ $comm.Action = 'status' })
+
+            # Timer syncs tooltip + pin label from main-thread state every second
+            $timer          = New-Object System.Windows.Forms.Timer
+            $timer.Interval = 1000
+            $timer.Add_Tick({
+                $game = $comm.CurrentGame
+                $tip  = if ($game) { "Gaming: $game" } else { "Gaming Optimizer - Idle" }
+                if (-not $comm.PinEnabled) { $tip += " [PIN OFF]" }
+                $icon.Text    = $tip.Substring(0, [Math]::Min($tip.Length, 63))
+                $pinItem.Text = "CPU Pinning: $(if ($comm.PinEnabled){'ON'}else{'OFF'})"
+                if ($comm.Exit) {
+                    $timer.Stop()
+                    $icon.Visible = $false
+                    $icon.Dispose()
+                    [System.Windows.Forms.Application]::Exit()
+                }
+            })
+            $timer.Start()
+            [System.Windows.Forms.Application]::Run()
+        }
+
+        $rs                  = [runspacefactory]::CreateRunspace()
+        $rs.ApartmentState   = 'STA'
+        $rs.ThreadOptions    = 'ReuseThread'
+        $rs.Open()
+        $script:trayPs       = [powershell]::Create()
+        $script:trayPs.Runspace = $rs
+        $script:trayPs.AddScript($trayScript).AddArgument($script:trayComm) | Out-Null
+        $script:trayPs.BeginInvoke() | Out-Null
     } catch {
-        $script:trayIcon = $null
+        $script:trayComm = $null
+        $script:trayPs   = $null
     }
 }
 
@@ -1113,33 +1149,23 @@ try {
                 }
             }
         } else {
-            # Pump Windows messages so the NotifyIcon context menu responds
-            try { [System.Windows.Forms.Application]::DoEvents() } catch {}
-
-            # Dispatch any action set by a click handler (handlers never call
-            # functions directly — that would re-enter the message loop and freeze)
-            switch ($script:trayAction) {
-                'togglepin' {
-                    $script:pinningEnabled = -not $script:pinningEnabled
-                    if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+            # Read action posted by the tray thread, dispatch on main thread
+            if ($script:trayComm) {
+                switch ($script:trayComm.Action) {
+                    'togglepin' {
+                        $script:pinningEnabled = -not $script:pinningEnabled
+                        if ($script:pinningEnabled) { Restore-Pinning } else { Release-Pinning }
+                    }
+                    'status' {
+                        $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
+                        $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
+                        Send-Toast "Gaming Optimizer  |  $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
+                    }
+                    'exit' { $script:exitRequested = $true }
                 }
-                'status' {
-                    $game = if ($script:currentGame) { $script:currentGame } else { "Idle" }
-                    $pin  = if ($script:pinningEnabled) { "pinning ON" } else { "pinning OFF" }
-                    Send-Toast "Gaming Optimizer  |  $game  |  $pin  |  $(Get-Date -Format 'HH:mm')"
-                }
-                'exit' { $script:exitRequested = $true }
-            }
-            $script:trayAction = $null
-
-            # Keep tooltip and pin-item label in sync
-            if ($script:trayIcon) {
-                $tip = if ($script:currentGame) { "Gaming: $($script:currentGame)" } else { "Gaming Optimizer - Idle" }
-                if (-not $script:pinningEnabled) { $tip += " [PIN OFF]" }
-                $script:trayIcon.Text = $tip.Substring(0, [Math]::Min($tip.Length, 63))
-                if ($script:trayPinItem) {
-                    $script:trayPinItem.Text = "CPU Pinning: $(if ($script:pinningEnabled){'ON'}else{'OFF'})"
-                }
+                $script:trayComm.Action      = $null
+                $script:trayComm.PinEnabled  = $script:pinningEnabled
+                $script:trayComm.CurrentGame = $script:currentGame
             }
 
             # STOP sentinel file for scripted / scheduled exit
@@ -1274,17 +1300,7 @@ try {
 
         if (-not $script:trayMode) { Update-Dashboard $gamePct $ffPct $bgPct $gpu }
 
-        # In tray mode break the 3-second sleep into 100ms ticks so DoEvents keeps
-        # the NotifyIcon context menu and double-click responsive throughout the wait.
-        if ($script:trayMode) {
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            while ($sw.ElapsedMilliseconds -lt 3000 -and -not $script:exitRequested) {
-                try { [System.Windows.Forms.Application]::DoEvents() } catch {}
-                Start-Sleep -Milliseconds 100
-            }
-        } else {
-            Start-Sleep -Seconds 3
-        }
+        Start-Sleep -Seconds 3
     }
 } finally {
     End-GameSession
@@ -1318,12 +1334,11 @@ try {
         Write-Host "Session report saved to: $reportFile"
         Start-Sleep -Seconds 2
     } else {
-        # Hide and dispose the tray icon before sending the exit toast so it
+        # Signal the tray thread to hide the icon and exit its message pump,
+        # then clean up the runspace. Do this before the exit toast so the icon
         # doesn't linger in the notification area after the process exits.
-        if ($script:trayIcon) {
-            try { $script:trayIcon.Visible = $false; $script:trayIcon.Dispose() } catch {}
-            $script:trayIcon = $null
-        }
+        if ($script:trayComm) { $script:trayComm.Exit = $true; Start-Sleep -Milliseconds 600 }
+        if ($script:trayPs)   { try { $script:trayPs.Stop(); $script:trayPs.Dispose() } catch {} }
         Send-Toast "Session ended. Report: $(Split-Path $reportFile -Leaf)"
     }
 }
