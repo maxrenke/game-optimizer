@@ -12,7 +12,18 @@ param(
 if ($Mode -eq "cleanup") {
     Write-Host "Running cleanup mode — restoring system defaults..." -ForegroundColor Yellow
     $allCores  = [IntPtr](([int64]1 -shl [System.Environment]::ProcessorCount) - 1)
+    $allCoresI = ([int64]1 -shl [System.Environment]::ProcessorCount) - 1
     $normalPri = [System.Diagnostics.ProcessPriorityClass]::Normal
+    $badPri    = @('BelowNormal','Idle')   # only priorities the optimizer ever sets
+
+    # 0. Warn if optimizer is still running (cleanup won't stick)
+    $runningOpt = @(Get-Process pwsh -EA SilentlyContinue |
+        Where-Object { $_.Id -ne $PID -and
+            (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)" -EA SilentlyContinue).CommandLine -match 'gaming-optimizer' })
+    if ($runningOpt.Count -gt 0) {
+        Write-Host "  [!!] Optimizer still running (PID $($runningOpt.Id -join ', ')) — pinning will re-apply!" -ForegroundColor Yellow
+        Write-Host "       Stop the optimizer first, or cleanup will be undone within seconds." -ForegroundColor Yellow
+    }
 
     # 1. Restore Win32PrioritySeparation if stuck at gaming value 26
     try {
@@ -22,7 +33,7 @@ if ($Mode -eq "cleanup") {
             Set-ItemProperty -Path $keyPath -Name "Win32PrioritySeparation" -Value 2 -Type DWord -Force
             Write-Host "  [OK] Win32PrioritySeparation: 26 -> 2" -ForegroundColor Green
         } else {
-            Write-Host "  [--] Win32PrioritySeparation already $cur, skipping" -ForegroundColor DarkGray
+            Write-Host "  [--] Win32PrioritySeparation is $cur (OK)" -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "  [!!] Failed to restore Win32PrioritySeparation (needs admin)" -ForegroundColor Red
@@ -36,25 +47,36 @@ if ($Mode -eq "cleanup") {
             Start-Service SysMain -EA SilentlyContinue
             Write-Host "  [OK] SysMain restored and restarted" -ForegroundColor Green
         } else {
-            Write-Host "  [--] SysMain already running, skipping" -ForegroundColor DarkGray
+            Write-Host "  [--] SysMain already running (OK)" -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "  [!!] Failed to restore SysMain" -ForegroundColor Red
     }
 
-    # 3. Release all Firefox processes to all cores + Normal priority
-    $ffFixed = 0
-    foreach ($proc in (Get-Process firefox -EA SilentlyContinue)) {
-        try { $proc.ProcessorAffinity = $allCores; $proc.PriorityClass = $normalPri; $ffFixed++ } catch {}
+    # 3. Broad sweep — reset EVERY process with non-default affinity or degraded priority.
+    #    This catches game processes, anything from ExtraThrottledProcs, or anything else
+    #    the optimizer may have touched that isn't in the named list below.
+    $broadFixed = 0; $broadPriFixed = 0
+    $skipPids   = @($PID)   # never touch ourselves
+    foreach ($proc in (Get-Process -EA SilentlyContinue)) {
+        if ($skipPids -contains $proc.Id) { continue }
+        try {
+            $affOk = $proc.ProcessorAffinity.ToInt64() -eq $allCoresI
+            $priOk = $proc.PriorityClass -notin $badPri
+            if (-not $affOk) { $proc.ProcessorAffinity = $allCores; $broadFixed++ }
+            if (-not $priOk) { $proc.PriorityClass = $normalPri;    $broadPriFixed++ }
+        } catch {}
     }
-    if ($ffFixed -gt 0) {
-        Write-Host "  [OK] Released $ffFixed Firefox process(es) to all cores" -ForegroundColor Green
+    if ($broadFixed -gt 0 -or $broadPriFixed -gt 0) {
+        Write-Host "  [OK] Broad sweep: $broadFixed process(es) affinity reset, $broadPriFixed priority reset" -ForegroundColor Green
     } else {
-        Write-Host "  [--] No Firefox processes found" -ForegroundColor DarkGray
+        Write-Host "  [--] Broad sweep: all process affinities and priorities already default" -ForegroundColor DarkGray
     }
 
-    # 4. Release any background processes that may still be throttled
-    $bgProcs = @(
+    # 4. Named pass — explicitly reset the known Firefox + BG list and report counts
+    #    (belt-and-suspenders: some processes resist the broad sweep due to race conditions)
+    $namedProcs = @(
+        "firefox",
         "onedrive","icloudckks","iclouddrive","icloudservices","icloudhome",
         "phoneexperiencehost","crossdeviceservice",
         "malwarebytes","mbamservice","hearthstonedecktracker",
@@ -62,21 +84,41 @@ if ($Mode -eq "cleanup") {
         "battle.net","hwinfo64","nahimicsvc32","nahimicsvc64",
         "unigetui","appcontrol"
     )
-    $bgFixed = 0
-    foreach ($name in $bgProcs) {
+    # Merge in ExtraThrottledProcs from config.psd1 if present
+    $cfgPath = Join-Path $PSScriptRoot "config.psd1"
+    if (Test-Path $cfgPath) {
+        try {
+            $cfg = Import-PowerShellDataFile $cfgPath -EA Stop
+            if ($cfg.ExtraThrottledProcs) { $namedProcs += $cfg.ExtraThrottledProcs }
+        } catch {}
+    }
+    $namedFixed = 0
+    foreach ($name in ($namedProcs | Select-Object -Unique)) {
         foreach ($proc in (Get-Process -Name $name -EA SilentlyContinue)) {
-            try { $proc.ProcessorAffinity = $allCores; $proc.PriorityClass = $normalPri; $bgFixed++ } catch {}
+            try {
+                $needsAff = $proc.ProcessorAffinity.ToInt64() -ne $allCoresI
+                $needsPri = $proc.PriorityClass -in $badPri
+                if ($needsAff -or $needsPri) {
+                    $proc.ProcessorAffinity = $allCores
+                    $proc.PriorityClass     = $normalPri
+                    $namedFixed++
+                }
+            } catch {}
         }
     }
-    if ($bgFixed -gt 0) {
-        Write-Host "  [OK] Released $bgFixed background process(es)" -ForegroundColor Green
+    if ($namedFixed -gt 0) {
+        Write-Host "  [OK] Named pass: $namedFixed known process(es) explicitly reset" -ForegroundColor Green
+    } else {
+        Write-Host "  [--] Named pass: all known processes already default (OK)" -ForegroundColor DarkGray
     }
 
     # 5. Kill any orphaned thread jobs from a crashed session
-    $jobs = Get-Job -EA SilentlyContinue
-    if ($jobs) {
+    $jobs = @(Get-Job -EA SilentlyContinue)
+    if ($jobs.Count -gt 0) {
         $jobs | Remove-Job -Force -EA SilentlyContinue
         Write-Host "  [OK] Removed $($jobs.Count) orphaned job(s)" -ForegroundColor Green
+    } else {
+        Write-Host "  [--] No orphaned jobs (OK)" -ForegroundColor DarkGray
     }
 
     # 6. Reset console state in case script crashed mid-TUI
