@@ -991,7 +991,8 @@ trap {
 try {
     Add-Type -Name _CWin -Namespace GO -MemberDefinition '
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
-        [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();' -EA Stop
+        [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);' -EA Stop
 } catch {}  # already defined on re-entry is fine
 
 $script:trayComm = $null
@@ -1242,8 +1243,24 @@ try {
                     }
                     'togglewindow' {
                         $script:trayMode = $false
-                        try { [GO._CWin]::ShowWindow([GO._CWin]::GetConsoleWindow(), 9) | Out-Null } catch {}
+                        try {
+                            $hwnd = [GO._CWin]::GetConsoleWindow()
+                            [GO._CWin]::ShowWindow($hwnd, 5) | Out-Null      # SW_SHOW (not SW_RESTORE which only unminimizes)
+                            [GO._CWin]::SetForegroundWindow($hwnd) | Out-Null
+                        } catch {}
+                        Start-Sleep -Milliseconds 150   # let Windows render before writing to the buffer
                         [Console]::CursorVisible = $false
+                        try {
+                            $ui = $Host.UI.RawUI
+                            $b = $ui.BufferSize
+                            if ($b.Width  -lt $W+2)            { $b.Width  = $W+2 }
+                            if ($b.Height -lt $TOTAL_ROWS + 4) { $b.Height = $TOTAL_ROWS + 4 }
+                            $ui.BufferSize = $b
+                            $wn = $ui.WindowSize
+                            if ($wn.Width  -lt $W+2)            { $wn.Width  = $W+2 }
+                            if ($wn.Height -lt $TOTAL_ROWS + 2) { $wn.Height = $TOTAL_ROWS + 2 }
+                            $ui.WindowSize = $wn
+                        } catch {}
                         Draw-Frame
                     }
                     'exit' { $script:exitRequested = $true }
