@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+.vs/
+Properties/PublishProfiles/
+*.suo
+*.userprefs
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appxsym

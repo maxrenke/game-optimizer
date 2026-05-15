@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="GameOptimizer.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24,16,24,24" MaxWidth="700">
+
+            <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <!-- Network -->
+            <Expander Header="Network Adapter" IsExpanded="True">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBox Header="NIC Name" Text="{x:Bind ViewModel.NicName, Mode=TwoWay}"
+                             PlaceholderText="e.g. Ethernet 2" />
+                    <TextBlock Text="Name from Get-NetAdapter. Leave blank to auto-detect."
+                               FontSize="11" Opacity="0.6" />
+                </StackPanel>
+            </Expander>
+
+            <!-- Affinity Masks -->
+            <Expander Header="CPU Affinity Masks" IsExpanded="True">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                        Hex bitmasks. Each bit = one logical processor.
+                        Default: Ryzen 7 5800X3D (8c/16t) - Game 0x0FFF, Firefox/VLC 0x3000, Bg 0xC000.
+                    </TextBlock>
+                    <TextBox Header="Game affinity mask (hex)" Text="{x:Bind ViewModel.GameAffinityHex, Mode=TwoWay}" />
+                    <TextBox Header="Firefox+VLC affinity mask (hex)" Text="{x:Bind ViewModel.FirefoxAffinityHex, Mode=TwoWay}" />
+                    <TextBox Header="Background affinity mask (hex)" Text="{x:Bind ViewModel.BgAffinityHex, Mode=TwoWay}" />
+                </StackPanel>
+            </Expander>
+
+            <!-- Alert Thresholds -->
+            <Expander Header="Alert Thresholds" IsExpanded="False">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <NumberBox Header="GPU temperature alert (°C)" Value="{x:Bind ViewModel.AlertGpuTempC, Mode=TwoWay}"
+                               Minimum="50" Maximum="110" SpinButtonPlacementMode="Inline" />
+                    <NumberBox Header="VRAM usage alert (%)" Value="{x:Bind ViewModel.AlertVramPct, Mode=TwoWay}"
+                               Minimum="50" Maximum="100" SpinButtonPlacementMode="Inline" />
+                    <NumberBox Header="GPU util sustained alert (%)" Value="{x:Bind ViewModel.AlertGpuUtilPct, Mode=TwoWay}"
+                               Minimum="50" Maximum="100" SpinButtonPlacementMode="Inline" />
+                    <NumberBox Header="Game CPU zone alert (%)" Value="{x:Bind ViewModel.AlertCpuZonePct, Mode=TwoWay}"
+                               Minimum="50" Maximum="100" SpinButtonPlacementMode="Inline" />
+                    <NumberBox Header="Sustained ticks (x3s) before alert fires" Value="{x:Bind ViewModel.AlertSustainedTicks, Mode=TwoWay}"
+                               Minimum="1" Maximum="20" SpinButtonPlacementMode="Inline" />
+                </StackPanel>
+            </Expander>
+
+            <!-- Game Paths -->
+            <Expander Header="Game Library Paths" IsExpanded="False">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                        Processes whose executable is inside one of these paths are treated as games
+                        and receive High priority + game affinity.
+                    </TextBlock>
+                    <ListView ItemsSource="{x:Bind ViewModel.GamePaths}" SelectionMode="None"
+                              MaxHeight="200">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind}" VerticalAlignment="Center"
+                                               FontFamily="Consolas" FontSize="11" />
+                                    <Button Grid.Column="1" Content="&#xE74D;"
+                                            FontFamily="Segoe Fluent Icons" FontSize="12"
+                                            Command="{Binding DataContext.ViewModel.RemoveGamePathCommand,
+                                                ElementName=RootPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox PlaceholderText="C:\Games\..." Text="{x:Bind ViewModel.NewGamePath, Mode=TwoWay}" />
+                        <Button Grid.Column="1" Content="Add" Command="{x:Bind ViewModel.AddGamePathCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+
+            <!-- Extra Throttled Procs -->
+            <Expander Header="Extra Background Processes to Throttle" IsExpanded="False">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                        Additional process names (no .exe) to pin to the Background zone
+                        and set to BelowNormal priority when gaming.
+                    </TextBlock>
+                    <ListView ItemsSource="{x:Bind ViewModel.ExtraThrottledProcs}" SelectionMode="None"
+                              MaxHeight="120">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="12" />
+                                    <Button Grid.Column="1" Content="&#xE74D;"
+                                            FontFamily="Segoe Fluent Icons" FontSize="12"
+                                            Command="{Binding DataContext.ViewModel.RemoveThrottledProcCommand,
+                                                ElementName=RootPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox PlaceholderText="processname (no .exe)" Text="{x:Bind ViewModel.NewThrottledProc, Mode=TwoWay}" />
+                        <Button Grid.Column="1" Content="Add" Command="{x:Bind ViewModel.AddThrottledProcCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+
+            <!-- Save button -->
+            <Button Content="Save Settings" Command="{x:Bind ViewModel.SaveCommand}"
+                    Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+            <TextBlock Text="Settings take effect on next restart of the optimizer service."
+                       FontSize="11" Opacity="0.5" />
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

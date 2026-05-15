@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "GameOptimizer (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "GameOptimizer (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
