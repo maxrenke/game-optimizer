@@ -242,6 +242,42 @@
                 </Border>
             </Grid>
 
+            <!-- Session summary (visible when gaming) -->
+            <Border CornerRadius="8" Padding="12"
+                    Visibility="{x:Bind ViewModel.IsGaming, Mode=OneWay,
+                        Converter={StaticResource BoolToVisibilityConverter}}">
+                <Border.Background>
+                    <SolidColorBrush Color="#1A2E1A" Opacity="0.9" />
+                </Border.Background>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="SESSION" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
+                        <TextBlock Text="{x:Bind ViewModel.SessionDuration, Mode=OneWay}" FontFamily="Consolas" FontSize="13"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="PEAK CPU" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
+                        <TextBlock Text="{x:Bind ViewModel.SessionPeakCpu, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
+                                   Foreground="#80CC80"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock Text="PEAK GPU" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
+                        <TextBlock Text="{x:Bind ViewModel.SessionPeakGpu, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
+                                   Foreground="#80CCFF"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="2">
+                        <TextBlock Text="PEAK TEMP" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
+                        <TextBlock Text="{x:Bind ViewModel.SessionPeakTemp, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
+                                   Foreground="#FFCC80"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <!-- ── Network ─────────────────────────────────────────── -->
             <Border CornerRadius="8" Padding="12">
                 <Border.Background>
@@ -333,8 +369,12 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="EVENT LOG" FontSize="11" Opacity="0.6"
                                FontWeight="SemiBold" CharacterSpacing="100" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
-                                  ItemTemplate="{StaticResource LogLineTemplate}" />
+                    <ListView ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
+                              ItemTemplate="{StaticResource LogLineTemplate}"
+                              MaxHeight="320"
+                              SelectionMode="None"
+                              IsItemClickEnabled="False"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto" />
                 </StackPanel>
             </Border>
 

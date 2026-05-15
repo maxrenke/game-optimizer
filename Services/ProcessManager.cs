@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
@@ -34,12 +35,12 @@ public class ProcessManager : IDisposable
     private readonly OptimizerConfig _cfg;
     private readonly IntPtr _allCores;
 
-    public Dictionary<int, string> ActiveGames { get; } = [];
-    private readonly HashSet<int> _appliedMediaZone = [];
-    private readonly HashSet<int> _pathFailCache = [];
+    public ConcurrentDictionary<int, string> ActiveGames { get; } = new();
+    private readonly ConcurrentDictionary<int, byte> _appliedMediaZone = new();
+    private readonly ConcurrentDictionary<int, byte> _pathFailCache = new();
 
     // Track every PID we've modified so ReleasePinning/RestoreAll only touches those
-    private readonly HashSet<int> _modifiedPids = [];
+    private readonly ConcurrentDictionary<int, byte> _modifiedPids = new();
 
     // WMI event watchers for instant process start/stop detection
     private ManagementEventWatcher? _startWatcher;
@@ -93,10 +94,10 @@ public class ProcessManager : IDisposable
                 name.Equals("vlc", StringComparison.OrdinalIgnoreCase))
             {
                 var proc = SafeGetProcess(pid);
-                if (proc is not null && !_appliedMediaZone.Contains(pid))
+                if (proc is not null && !_appliedMediaZone.ContainsKey(pid))
                 {
                     ApplyMediaZone(proc);
-                    lock (_appliedMediaZone) _appliedMediaZone.Add(pid);
+                    _appliedMediaZone[pid] = 0;
                     LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
                 }
                 return;
@@ -112,7 +113,7 @@ public class ProcessManager : IDisposable
                     {
                         proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                         if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
-                        lock (_modifiedPids) _modifiedPids.Add(pid);
+                        _modifiedPids[pid] = 0;
                     }
                     catch { }
                 }
@@ -129,13 +130,12 @@ public class ProcessManager : IDisposable
         try
         {
             var pid = Convert.ToInt32(e.NewEvent["ProcessID"]);
-            if (ActiveGames.TryGetValue(pid, out var name))
+            if (ActiveGames.TryRemove(pid, out var name))
             {
-                lock (ActiveGames) ActiveGames.Remove(pid);
                 LogEntry?.Invoke($"[ENDED] {name} closed (PID {pid}) (instant)");
             }
-            lock (_appliedMediaZone) _appliedMediaZone.Remove(pid);
-            lock (_modifiedPids) _modifiedPids.Remove(pid);
+            _appliedMediaZone.TryRemove(pid, out _);
+            _modifiedPids.TryRemove(pid, out _);
         }
         catch { }
     }
@@ -152,8 +152,8 @@ public class ProcessManager : IDisposable
             {
                 if (ApplyGame(proc))
                 {
-                    lock (ActiveGames) ActiveGames[proc.Id] = proc.ProcessName;
-                    lock (_modifiedPids) _modifiedPids.Add(proc.Id);
+                    ActiveGames[proc.Id] = proc.ProcessName;
+                    _modifiedPids[proc.Id] = 0;
                     newGames.Add(proc.ProcessName);
                     LogEntry?.Invoke($"[GAME] DETECTED: {proc.ProcessName} (PID {proc.Id})");
                 }
@@ -176,8 +176,8 @@ public class ProcessManager : IDisposable
         {
             if (SafeGetProcess(pid) is null)
             {
-                LogEntry?.Invoke($"[ENDED] {ActiveGames[pid]} closed (PID {pid})");
-                lock (ActiveGames) ActiveGames.Remove(pid);
+                if (ActiveGames.TryRemove(pid, out var exitedName))
+                    LogEntry?.Invoke($"[ENDED] {exitedName} closed (PID {pid})");
             }
         }
 
@@ -185,17 +185,19 @@ public class ProcessManager : IDisposable
         foreach (var proc in SafeGetProcessesByName("firefox")
             .Concat(SafeGetProcessesByName("vlc")))
         {
-            if (!_appliedMediaZone.Contains(proc.Id))
+            if (!_appliedMediaZone.ContainsKey(proc.Id))
             {
                 ApplyMediaZone(proc);
-                lock (_appliedMediaZone) _appliedMediaZone.Add(proc.Id);
-                lock (_modifiedPids) _modifiedPids.Add(proc.Id);
+                _appliedMediaZone[proc.Id] = 0;
+                _modifiedPids[proc.Id] = 0;
                 LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
             }
         }
 
-        _appliedMediaZone.RemoveWhere(pid => SafeGetProcess(pid) is null);
-        _pathFailCache.RemoveWhere(pid => SafeGetProcess(pid) is null);
+        foreach (var pid in _appliedMediaZone.Keys.ToList())
+            if (SafeGetProcess(pid) is null) _appliedMediaZone.TryRemove(pid, out _);
+        foreach (var pid in _pathFailCache.Keys.ToList())
+            if (SafeGetProcess(pid) is null) _pathFailCache.TryRemove(pid, out _);
 
         return newGames;
     }
@@ -211,7 +213,7 @@ public class ProcessManager : IDisposable
                 {
                     proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                     if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
-                    lock (_modifiedPids) _modifiedPids.Add(proc.Id);
+                    _modifiedPids[proc.Id] = 0;
                 }
                 catch { }
             }
@@ -221,8 +223,7 @@ public class ProcessManager : IDisposable
     public void ReleasePinning()
     {
         // Only reset PIDs we actually modified - no full process scan needed
-        var pidsToReset = new List<int>();
-        lock (_modifiedPids) pidsToReset.AddRange(_modifiedPids);
+        var pidsToReset = _modifiedPids.Keys.ToList();
 
         Parallel.ForEach(pidsToReset, pid =>
         {
@@ -255,8 +256,8 @@ public class ProcessManager : IDisposable
             {
                 proc.ProcessorAffinity = FirefoxAffinity;
                 proc.PriorityClass = ProcessPriorityClass.Normal;
-                lock (_appliedMediaZone) _appliedMediaZone.Add(proc.Id);
-                lock (_modifiedPids) _modifiedPids.Add(proc.Id);
+                _appliedMediaZone[proc.Id] = 0;
+                _modifiedPids[proc.Id] = 0;
             }
             catch { }
         }
@@ -266,8 +267,7 @@ public class ProcessManager : IDisposable
 
     public void RestoreAll()
     {
-        var pidsToReset = new List<int>();
-        lock (_modifiedPids) pidsToReset.AddRange(_modifiedPids);
+        var pidsToReset = _modifiedPids.Keys.ToList();
 
         Parallel.ForEach(pidsToReset, pid =>
         {
@@ -303,14 +303,14 @@ public class ProcessManager : IDisposable
         {
             proc.PriorityClass = ProcessPriorityClass.Normal;
             if (PinningEnabled) proc.ProcessorAffinity = FirefoxAffinity;
-            lock (_modifiedPids) _modifiedPids.Add(proc.Id);
+            _modifiedPids[proc.Id] = 0;
         }
         catch { }
     }
 
     private string? GetProcPath(Process proc)
     {
-        if (_pathFailCache.Contains(proc.Id)) return null;
+        if (_pathFailCache.ContainsKey(proc.Id)) return null;
         string? path = null;
         try { path = proc.MainModule?.FileName; } catch { }
         if (path is null)
@@ -328,9 +328,9 @@ public class ProcessManager : IDisposable
             try
             {
                 var ageMs = (DateTime.Now - proc.StartTime).TotalMilliseconds;
-                if (ageMs > 5000) _pathFailCache.Add(proc.Id);
+                if (ageMs > 5000) _pathFailCache[proc.Id] = 0;
             }
-            catch { _pathFailCache.Add(proc.Id); }
+            catch { _pathFailCache[proc.Id] = 0; }
         }
         return path;
     }

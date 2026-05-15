@@ -31,6 +31,9 @@ public class OptimizerConfig
 
     public List<string> ExtraThrottledProcs { get; set; } = [];
 
+    public bool StartMinimized { get; set; } = false;
+    public bool StartWithWindows { get; set; } = false;
+
     [JsonIgnore]
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -45,11 +48,27 @@ public class OptimizerConfig
                 var json = File.ReadAllText(ConfigPath);
                 return JsonSerializer.Deserialize<OptimizerConfig>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                    ?? new OptimizerConfig();
+                    ?? CreateDefault();
             }
         }
         catch { }
-        return new OptimizerConfig();
+        return CreateDefault();
+    }
+
+    private static OptimizerConfig CreateDefault()
+    {
+        var cfg = new OptimizerConfig();
+        var zones = AffinityCalculator.Calculate();
+        cfg.GameAffinityMask    = zones.GameMask;
+        cfg.FirefoxAffinityMask = zones.MediaMask;
+        cfg.BgAffinityMask      = zones.BgMask;
+
+        // Merge auto-detected game library paths with the hardcoded defaults
+        var detected = GameLibraryScanner.ScanAll();
+        if (detected.Count > 0)
+            cfg.GamePaths = [.. cfg.GamePaths.Union(detected, StringComparer.OrdinalIgnoreCase)];
+
+        return cfg;
     }
 
     public void Save()

@@ -24,6 +24,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int AlertGpuUtilPct { get; set; } = 95;
     [ObservableProperty] public partial int AlertCpuZonePct { get; set; } = 90;
     [ObservableProperty] public partial int AlertSustainedTicks { get; set; } = 4;
+    [ObservableProperty] public partial bool StartMinimized { get; set; } = false;
+    [ObservableProperty] public partial bool StartWithWindows { get; set; } = false;
 
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
@@ -73,6 +75,8 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.AlertSustainedTicks = AlertSustainedTicks;
             _cfg.GamePaths = [.. GamePaths];
             _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
+            _cfg.StartMinimized = StartMinimized;
+            _cfg.StartWithWindows = StartWithWindows;
             _cfg.Save();
         }
         catch { }
@@ -93,5 +97,7 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var p in _cfg.GamePaths) GamePaths.Add(p);
         ExtraThrottledProcs.Clear();
         foreach (var p in _cfg.ExtraThrottledProcs) ExtraThrottledProcs.Add(p);
+        StartMinimized = _cfg.StartMinimized;
+        StartWithWindows = _cfg.StartWithWindows;
     }
 }

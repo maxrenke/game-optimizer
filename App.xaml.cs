@@ -35,21 +35,22 @@ public partial class App : Application
                 try
                 {
                     Process.Start(new ProcessStartInfo(exePath)
-                    {
-                        UseShellExecute = true,
-                        Verb = "runas"
-                    });
+                        { UseShellExecute = true, Verb = "runas" });
+                    Application.Current.Exit();
+                    return;
                 }
-                catch { } // user cancelled UAC
+                catch { } // user cancelled UAC or failed - continue without elevation
             }
-            Microsoft.UI.Xaml.Application.Current.Exit();
-            return;
+            // Running without admin - affinity/priority changes will fail silently
         }
         UIDispatcher = DispatcherQueue.GetForCurrentThread();
         MainViewModel = new MainPageViewModel(UIDispatcher);
 
         Window = new MainWindow();
         Window.Activate();
+
+        if (Config.StartMinimized)
+            Window.HideToTray();
 
         // Tray icon (uses H.NotifyIcon.WinUI; must init on UI thread)
         TrayService = new TrayService(UIDispatcher) { WindowVisible = true };

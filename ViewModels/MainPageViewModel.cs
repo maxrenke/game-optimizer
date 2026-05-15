@@ -59,6 +59,12 @@ public partial class MainPageViewModel : ObservableObject
     // ── Log ────────────────────────────────────────────────────
     [ObservableProperty] public partial System.Collections.ObjectModel.ObservableCollection<LogLine> LogLines { get; set; } = [];
 
+    // ── Session Summary ────────────────────────────────────────
+    [ObservableProperty] public partial string SessionDuration { get; set; } = "0:00";
+    [ObservableProperty] public partial string SessionPeakCpu { get; set; } = "-";
+    [ObservableProperty] public partial string SessionPeakGpu { get; set; } = "-";
+    [ObservableProperty] public partial string SessionPeakTemp { get; set; } = "-";
+
     // ── Footer ─────────────────────────────────────────────────
     [ObservableProperty] public partial int ReportCount { get; set; }
     [ObservableProperty] public partial string ReportDir { get; set; } = SessionTracker.ReportDir;
@@ -125,6 +131,15 @@ public partial class MainPageViewModel : ObservableObject
                 LogLines.Add(new LogLine(l));
 
             ReportCount = s.ReportCount;
+
+            if (s.CurrentSession is not null)
+            {
+                var dur = s.CurrentSession.Duration;
+                SessionDuration = $"{(int)dur.TotalMinutes}:{dur.Seconds:D2}";
+                SessionPeakCpu  = $"{s.CurrentSession.PeakCpu}%";
+                SessionPeakGpu  = $"{s.CurrentSession.PeakGpu}%";
+                SessionPeakTemp = s.CurrentSession.PeakTempC > 0 ? $"{s.CurrentSession.PeakTempC}C" : "-";
+            }
         });
     }
 }

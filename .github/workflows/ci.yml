@@ -1,0 +1,21 @@
+name: CI
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+      - name: Restore
+        run: dotnet restore Tests/GameOptimizer.Tests.csproj
+      - name: Build
+        run: dotnet build Tests/GameOptimizer.Tests.csproj --no-restore -c Release
+      - name: Test
+        run: dotnet test Tests/GameOptimizer.Tests.csproj --no-build -c Release --logger "console;verbosity=detailed"

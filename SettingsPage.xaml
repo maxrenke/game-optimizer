@@ -13,6 +13,16 @@
 
             <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}" />
 
+            <!-- Behavior -->
+            <Expander Header="Behavior" IsExpanded="True">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <ToggleSwitch Header="Start minimized to tray"
+                                  IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Start with Windows"
+                                  IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+                </StackPanel>
+            </Expander>
+
             <!-- Network -->
             <Expander Header="Network Adapter" IsExpanded="True">
                 <StackPanel Spacing="8" Padding="0,8,0,0">

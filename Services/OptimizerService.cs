@@ -15,7 +15,8 @@ public record OptimizerSnapshot(
     IReadOnlyList<string> Log,
     TimeSpan Uptime,
     bool PinningEnabled,
-    int ReportCount);
+    int ReportCount,
+    GameSession? CurrentSession);
 
 public class OptimizerService : IDisposable
 {
@@ -27,7 +28,7 @@ public class OptimizerService : IDisposable
     private readonly BottleneckDetector _bottleneck;
     private readonly AlertMonitor _alerts;
     private readonly System.Collections.Generic.Queue<string> _log = new();
-    private const int LogMax = 10;
+    private const int LogMax = 25;
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -187,7 +188,8 @@ public class OptimizerService : IDisposable
             Log: _log.ToList(),
             Uptime: DateTime.Now - _startTime,
             PinningEnabled: _pm.PinningEnabled,
-            ReportCount: ReportCount());
+            ReportCount: ReportCount(),
+            CurrentSession: _sessions.Current);
 
         SnapshotReady?.Invoke(snap);
         await Task.CompletedTask;
