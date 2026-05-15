@@ -439,7 +439,8 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="EVENT LOG" FontSize="11" Opacity="0.6"
                                FontWeight="SemiBold" CharacterSpacing="100" />
-                    <ListView ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
+                    <ListView x:Name="LogListView"
+                              ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
                               ItemTemplate="{StaticResource LogLineTemplate}"
                               MaxHeight="320"
                               SelectionMode="None"

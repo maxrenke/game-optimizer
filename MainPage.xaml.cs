@@ -21,6 +21,12 @@ public sealed partial class MainPage : Page
                                or nameof(ViewModel.NetHistoryIndex))
                 DrawSparklines();
         };
+
+        ViewModel.LogLines.CollectionChanged += (_, _) =>
+        {
+            if (LogListView.Items.Count > 0)
+                LogListView.ScrollIntoView(LogListView.Items[^1]);
+        };
     }
 
     private void DrawSparklines()
