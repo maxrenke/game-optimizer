@@ -41,6 +41,11 @@ public sealed partial class MainWindow : Window
         if (App.TrayService is not null) App.TrayService.WindowVisible = true;
     }
 
+    public void UpdatePinState(bool pinEnabled)
+    {
+        AppTitleBar.Subtitle = pinEnabled ? "CPU PINNING ON" : "CPU PINNING OFF";
+    }
+
     public void ShowSettings() => RootFrame.Navigate(typeof(SettingsPage));
     public void ShowMain() => RootFrame.Navigate(typeof(MainPage));
 }

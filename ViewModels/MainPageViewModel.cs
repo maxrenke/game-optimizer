@@ -19,7 +19,7 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial bool IsGaming { get; set; }
     [ObservableProperty] public partial string GameName { get; set; } = "-";
     [ObservableProperty] public partial string UptimeText { get; set; } = "00h 00m 00s";
-    [ObservableProperty] public partial bool PinningEnabled { get; set; } = true;
+    [ObservableProperty] public partial bool PinningEnabled { get; set; } = false;
 
     // ── CPU Zones ──────────────────────────────────────────────
     [ObservableProperty] public partial int GameCpuPct { get; set; }
@@ -65,6 +65,11 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial string SessionPeakGpu { get; set; } = "-";
     [ObservableProperty] public partial string SessionPeakTemp { get; set; } = "-";
 
+    // ── Active Zones ───────────────────────────────────────────
+    [ObservableProperty] public partial string GameZoneProcs { get; set; } = "(none)";
+    [ObservableProperty] public partial string MediaZoneProcs { get; set; } = "(none)";
+    [ObservableProperty] public partial string BgZoneProcs { get; set; } = "(none)";
+
     // ── Footer ─────────────────────────────────────────────────
     [ObservableProperty] public partial int ReportCount { get; set; }
     [ObservableProperty] public partial string ReportDir { get; set; } = SessionTracker.ReportDir;
@@ -77,6 +82,7 @@ public partial class MainPageViewModel : ObservableObject
             GameName = s.GameName;
             UptimeText = $"{(int)s.Uptime.TotalHours:D2}h {s.Uptime.Minutes:D2}m {s.Uptime.Seconds:D2}s";
             PinningEnabled = s.PinningEnabled;
+            App.Window.UpdatePinState(s.PinningEnabled);
 
             GameCpuPct = s.GameCpuPct;
             FfCpuPct = s.FfCpuPct;
@@ -131,6 +137,10 @@ public partial class MainPageViewModel : ObservableObject
                 LogLines.Add(new LogLine(l));
 
             ReportCount = s.ReportCount;
+
+            GameZoneProcs  = s.GameProcesses.Count  > 0 ? string.Join("\n", s.GameProcesses)  : "(none)";
+            MediaZoneProcs = s.MediaProcesses.Count > 0 ? string.Join("\n", s.MediaProcesses) : "(none)";
+            BgZoneProcs    = s.BgProcesses.Count    > 0 ? string.Join("\n", s.BgProcesses)    : "(none)";
 
             if (s.CurrentSession is not null)
             {

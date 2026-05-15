@@ -36,7 +36,8 @@ public class ProcessManager : IDisposable
     private readonly IntPtr _allCores;
 
     public ConcurrentDictionary<int, string> ActiveGames { get; } = new();
-    private readonly ConcurrentDictionary<int, byte> _appliedMediaZone = new();
+    private readonly ConcurrentDictionary<int, string> _appliedMediaZone = new();
+    private readonly ConcurrentDictionary<int, string> _appliedBgProcs = new();
     private readonly ConcurrentDictionary<int, byte> _pathFailCache = new();
 
     // Track every PID we've modified so ReleasePinning/RestoreAll only touches those
@@ -46,7 +47,7 @@ public class ProcessManager : IDisposable
     private ManagementEventWatcher? _startWatcher;
     private ManagementEventWatcher? _stopWatcher;
 
-    public bool PinningEnabled { get; set; } = true;
+    public bool PinningEnabled { get; set; } = false;
 
     public event Action<string>? LogEntry;
 
@@ -60,6 +61,10 @@ public class ProcessManager : IDisposable
     public IntPtr GameAffinity => (IntPtr)_cfg.GameAffinityMask;
     public IntPtr FirefoxAffinity => (IntPtr)_cfg.FirefoxAffinityMask;
     public IntPtr BgAffinity => (IntPtr)_cfg.BgAffinityMask;
+
+    public IReadOnlyList<string> GameProcessNames => [.. ActiveGames.Values.Distinct()];
+    public IReadOnlyList<string> MediaProcessNames => [.. _appliedMediaZone.Values.Distinct()];
+    public IReadOnlyList<string> BgProcessNames => [.. _appliedBgProcs.Values.Distinct()];
 
     private string[] AllBgProcs => [.. BuiltInBgProcs, .. _cfg.ExtraThrottledProcs];
 
@@ -97,7 +102,7 @@ public class ProcessManager : IDisposable
                 if (proc is not null && !_appliedMediaZone.ContainsKey(pid))
                 {
                     ApplyMediaZone(proc);
-                    _appliedMediaZone[pid] = 0;
+                    _appliedMediaZone[pid] = name;
                     LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
                 }
                 return;
@@ -114,6 +119,7 @@ public class ProcessManager : IDisposable
                         proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                         if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
                         _modifiedPids[pid] = 0;
+                        _appliedBgProcs[pid] = name;
                     }
                     catch { }
                 }
@@ -135,6 +141,7 @@ public class ProcessManager : IDisposable
                 LogEntry?.Invoke($"[ENDED] {name} closed (PID {pid}) (instant)");
             }
             _appliedMediaZone.TryRemove(pid, out _);
+            _appliedBgProcs.TryRemove(pid, out _);
             _modifiedPids.TryRemove(pid, out _);
         }
         catch { }
@@ -188,14 +195,15 @@ public class ProcessManager : IDisposable
             if (!_appliedMediaZone.ContainsKey(proc.Id))
             {
                 ApplyMediaZone(proc);
-                _appliedMediaZone[proc.Id] = 0;
-                _modifiedPids[proc.Id] = 0;
+                _appliedMediaZone[proc.Id] = proc.ProcessName;
                 LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
             }
         }
 
         foreach (var pid in _appliedMediaZone.Keys.ToList())
             if (SafeGetProcess(pid) is null) _appliedMediaZone.TryRemove(pid, out _);
+        foreach (var pid in _appliedBgProcs.Keys.ToList())
+            if (SafeGetProcess(pid) is null) _appliedBgProcs.TryRemove(pid, out _);
         foreach (var pid in _pathFailCache.Keys.ToList())
             if (SafeGetProcess(pid) is null) _pathFailCache.TryRemove(pid, out _);
 
@@ -214,6 +222,7 @@ public class ProcessManager : IDisposable
                     proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                     if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
                     _modifiedPids[proc.Id] = 0;
+                    _appliedBgProcs[proc.Id] = proc.ProcessName;
                 }
                 catch { }
             }
@@ -256,7 +265,7 @@ public class ProcessManager : IDisposable
             {
                 proc.ProcessorAffinity = FirefoxAffinity;
                 proc.PriorityClass = ProcessPriorityClass.Normal;
-                _appliedMediaZone[proc.Id] = 0;
+                _appliedMediaZone[proc.Id] = proc.ProcessName;
                 _modifiedPids[proc.Id] = 0;
             }
             catch { }

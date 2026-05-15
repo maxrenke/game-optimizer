@@ -8,9 +8,11 @@ public static class GameLibraryScanner
     public static List<string> ScanAll()
     {
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in ScanSteam()) paths.Add(p);
-        foreach (var p in ScanEpic())  paths.Add(p);
-        foreach (var p in ScanGog())   paths.Add(p);
+        foreach (var p in ScanSteam())   paths.Add(p);
+        foreach (var p in ScanEpic())    paths.Add(p);
+        foreach (var p in ScanGog())     paths.Add(p);
+        foreach (var p in ScanUbisoft()) paths.Add(p);
+        foreach (var p in ScanEa())      paths.Add(p);
         return [.. paths.Where(Directory.Exists).OrderBy(x => x)];
     }
 
@@ -76,6 +78,64 @@ public static class GameLibraryScanner
                 var parent = Path.GetDirectoryName(dir) ?? dir;
                 if (seen.Add(parent)) yield return parent;
             }
+        }
+    }
+
+    public static IEnumerable<string> ScanUbisoft()
+    {
+        string[] keys =
+        [
+            @"SOFTWARE\Ubisoft\Launcher\Installs",
+            @"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs"
+        ];
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var keyPath in keys)
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+            if (key is null) continue;
+            foreach (var sub in key.GetSubKeyNames())
+            {
+                using var sk = key.OpenSubKey(sub);
+                var dir = sk?.GetValue("InstallDir") as string;
+                if (dir is null) continue;
+                dir = dir.TrimEnd('\\', '/');
+                var parent = Path.GetDirectoryName(dir) ?? dir;
+                if (Directory.Exists(dir) && seen.Add(parent)) yield return parent;
+            }
+        }
+    }
+
+    public static IEnumerable<string> ScanEa()
+    {
+        string[] keys =
+        [
+            @"SOFTWARE\Electronic Arts",
+            @"SOFTWARE\WOW6432Node\Electronic Arts"
+        ];
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var keyPath in keys)
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+            if (key is null) continue;
+            foreach (var sub in key.GetSubKeyNames())
+            {
+                using var sk = key.OpenSubKey(sub);
+                var dir = (sk?.GetValue("Install Dir") ?? sk?.GetValue("InstallDir")) as string;
+                if (dir is null) continue;
+                dir = dir.TrimEnd('\\', '/');
+                var parent = Path.GetDirectoryName(dir) ?? dir;
+                if (Directory.Exists(dir) && seen.Add(parent)) yield return parent;
+            }
+        }
+
+        foreach (var defaultDir in new[]
+        {
+            @"C:\Program Files\EA Games",
+            @"C:\Program Files (x86)\EA Games",
+        })
+        {
+            if (Directory.Exists(defaultDir) && seen.Add(defaultDir))
+                yield return defaultDir;
         }
     }
 

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameOptimizer.Services;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 
 namespace GameOptimizer.ViewModels;
 
@@ -78,6 +79,31 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.StartMinimized = StartMinimized;
             _cfg.StartWithWindows = StartWithWindows;
             _cfg.Save();
+            ApplyStartWithWindows(StartWithWindows);
+        }
+        catch { }
+    }
+
+    private static void ApplyStartWithWindows(bool enable)
+    {
+        try
+        {
+            string args;
+            if (enable)
+            {
+                var exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+                if (exePath is null) return;
+                args = $"/create /tn \"GameOptimizer\" /tr \"\\\"{exePath}\\\"\" /sc ONLOGON /rl HIGHEST /f";
+            }
+            else
+            {
+                args = "/delete /tn \"GameOptimizer\" /f";
+            }
+            Process.Start(new ProcessStartInfo("schtasks.exe", args)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false
+            })?.WaitForExit(5000);
         }
         catch { }
     }

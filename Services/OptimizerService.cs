@@ -16,7 +16,10 @@ public record OptimizerSnapshot(
     TimeSpan Uptime,
     bool PinningEnabled,
     int ReportCount,
-    GameSession? CurrentSession);
+    GameSession? CurrentSession,
+    IReadOnlyList<string> GameProcesses,
+    IReadOnlyList<string> MediaProcesses,
+    IReadOnlyList<string> BgProcesses);
 
 public class OptimizerService : IDisposable
 {
@@ -189,7 +192,10 @@ public class OptimizerService : IDisposable
             Uptime: DateTime.Now - _startTime,
             PinningEnabled: _pm.PinningEnabled,
             ReportCount: ReportCount(),
-            CurrentSession: _sessions.Current);
+            CurrentSession: _sessions.Current,
+            GameProcesses: _pm.GameProcessNames,
+            MediaProcesses: _pm.MediaProcessNames,
+            BgProcesses: _pm.BgProcessNames);
 
         SnapshotReady?.Invoke(snap);
         await Task.CompletedTask;

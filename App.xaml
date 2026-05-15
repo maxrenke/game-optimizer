@@ -23,6 +23,10 @@
             <conv:AlertToGlyphConverter x:Key="AlertToGlyphConverter" />
             <conv:AlertToColorConverter x:Key="AlertToColorConverter" />
             <conv:PinToTextConverter x:Key="PinToTextConverter" />
+            <conv:PinToColorConverter x:Key="PinToColorConverter" />
+            <conv:PinToBgConverter x:Key="PinToBgConverter" />
+            <conv:PinToBorderConverter x:Key="PinToBorderConverter" />
+            <conv:PinToOnOffConverter x:Key="PinToOnOffConverter" />
             <conv:ReportCountConverter x:Key="ReportCountConverter" />
             <conv:DoubleToF0Converter x:Key="DoubleToF0Converter" />
         </ResourceDictionary>

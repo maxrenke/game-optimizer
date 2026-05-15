@@ -6,6 +6,11 @@ namespace GameOptimizer.Services;
 
 public class SystemService
 {
+    [DllImport("winmm.dll")]
+    private static extern uint timeBeginPeriod(uint uPeriod);
+    [DllImport("winmm.dll")]
+    private static extern uint timeEndPeriod(uint uPeriod);
+
     private const string PrioKey = @"SYSTEM\CurrentControlSet\Control\PriorityControl";
     private const string PrioValue = "Win32PrioritySeparation";
     private const int GamingPrio = 26;
@@ -30,6 +35,9 @@ public class SystemService
             }
         }
         catch { LogEntry?.Invoke("[SYS] PrioritySep change failed (needs admin)"); }
+
+        timeBeginPeriod(1);
+        LogEntry?.Invoke("[SYS] Timer resolution set to 1ms");
 
         // Suspend SysMain (Superfetch) - useless on NVMe
         try
@@ -62,6 +70,8 @@ public class SystemService
             }
             catch { }
         }
+
+        timeEndPeriod(1);
 
         if (_sysMainStopped)
         {
@@ -96,12 +106,12 @@ public class SystemService
 // Helper to change service start mode (ServiceController doesn't expose this directly)
 internal static class ServiceHelper
 {
-    [System.Runtime.InteropServices.DllImport("advapi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool ChangeServiceConfig(IntPtr hService, uint nServiceType, uint nStartType,
         uint nErrorControl, string? lpBinaryPathName, string? lpLoadOrderGroup, IntPtr lpdwTagId,
         string? lpDependencies, string? lpServiceStartName, string? lpPassword, string? lpDisplayName);
 
-    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool CloseServiceHandle(IntPtr hSCObject);
 
     public static void ChangeStartMode(ServiceController svc, ServiceStartMode mode)

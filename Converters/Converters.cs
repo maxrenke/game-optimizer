@@ -113,6 +113,46 @@ public class PinToTextConverter : IValueConverter
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 
+public class PinToColorConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, string l)
+    {
+        var on = value is bool b && b;
+        return new SolidColorBrush(on ? Color.FromArgb(255, 80, 220, 100)
+                                      : Color.FromArgb(255, 220, 160, 40));
+    }
+    public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
+}
+
+public class PinToBgConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, string l)
+    {
+        var on = value is bool b && b;
+        return new SolidColorBrush(on ? Color.FromArgb(55, 60, 200, 80)
+                                      : Color.FromArgb(55, 220, 140, 30));
+    }
+    public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
+}
+
+public class PinToBorderConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, string l)
+    {
+        var on = value is bool b && b;
+        return new SolidColorBrush(on ? Color.FromArgb(160, 60, 200, 80)
+                                      : Color.FromArgb(160, 220, 140, 30));
+    }
+    public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
+}
+
+public class PinToOnOffConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? "ON" : "OFF";
+    public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
+}
+
 public class ReportCountConverter : IValueConverter
 {
     public object Convert(object value, Type t, object p, string l) =>

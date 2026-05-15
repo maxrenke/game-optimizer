@@ -4,11 +4,17 @@ using H.NotifyIcon.Core;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
+using System.Runtime.InteropServices;
 
 namespace GameOptimizer.Tray;
 
 public class TrayService : IDisposable
 {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint LoadImage(nint hInst, string lpszName, uint uType, int cx, int cy, uint fuLoad);
+    private const uint IMAGE_ICON = 1;
+    private const uint LR_LOADFROMFILE = 0x10;
+
     private TaskbarIcon? _icon;
     private readonly DispatcherQueue _dispatcher;
 
@@ -81,6 +87,14 @@ public class TrayService : IDisposable
             timer.Start();
 
             _icon.ForceCreate(false);
+
+            // Load real Win32 HICON - BitmapImage only feeds the WinUI render pipeline
+            var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            if (System.IO.File.Exists(icoPath))
+            {
+                var hIcon = LoadImage(0, icoPath, IMAGE_ICON, 0, 0, LR_LOADFROMFILE);
+                if (hIcon != 0) _icon.TrayIcon.UpdateIcon(hIcon);
+            }
         });
     }
 
