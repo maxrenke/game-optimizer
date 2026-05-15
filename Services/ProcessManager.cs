@@ -4,12 +4,11 @@ using System.Runtime.InteropServices;
 
 namespace GameOptimizer.Services;
 
-public class ProcessManager
+public class ProcessManager : IDisposable
 {
     [DllImport("kernel32.dll")]
     private static extern bool SetProcessAffinityMask(IntPtr hProcess, IntPtr dwProcessAffinityMask);
 
-    // Processes whose names indicate they are NOT actual games (launchers, helpers, etc.)
     private static readonly HashSet<string> NotAGame = new(StringComparer.OrdinalIgnoreCase)
     {
         "steam","steamwebhelper","steamservice","gameoverlayui",
@@ -22,7 +21,6 @@ public class ProcessManager
         "stardocklauncher","unins000"
     };
 
-    // Built-in background processes to throttle
     private static readonly string[] BuiltInBgProcs =
     [
         "onedrive","icloudckks","iclouddrive","icloudservices","icloudhome",
@@ -36,12 +34,16 @@ public class ProcessManager
     private readonly OptimizerConfig _cfg;
     private readonly IntPtr _allCores;
 
-    // PID -> process name for active games
     public Dictionary<int, string> ActiveGames { get; } = [];
-    // PIDs we have applied firefox-zone affinity to (firefox + vlc)
     private readonly HashSet<int> _appliedMediaZone = [];
-    // PIDs whose path we could not resolve yet
     private readonly HashSet<int> _pathFailCache = [];
+
+    // Track every PID we've modified so ReleasePinning/RestoreAll only touches those
+    private readonly HashSet<int> _modifiedPids = [];
+
+    // WMI event watchers for instant process start/stop detection
+    private ManagementEventWatcher? _startWatcher;
+    private ManagementEventWatcher? _stopWatcher;
 
     public bool PinningEnabled { get; set; } = true;
 
@@ -60,8 +62,84 @@ public class ProcessManager
 
     private string[] AllBgProcs => [.. BuiltInBgProcs, .. _cfg.ExtraThrottledProcs];
 
-    // Scan running processes for new games and new firefox/vlc instances.
-    // Returns names of any newly detected games.
+    // Subscribe to WMI process start/stop events for instant detection.
+    // Fires on a WMI thread - all handlers are thread-safe.
+    public void StartWmiWatcher()
+    {
+        try
+        {
+            _startWatcher = new ManagementEventWatcher(
+                new WqlEventQuery("SELECT * FROM Win32_ProcessStartTrace"));
+            _startWatcher.EventArrived += OnProcessStarted;
+            _startWatcher.Start();
+
+            _stopWatcher = new ManagementEventWatcher(
+                new WqlEventQuery("SELECT * FROM Win32_ProcessStopTrace"));
+            _stopWatcher.EventArrived += OnProcessStopped;
+            _stopWatcher.Start();
+        }
+        catch { } // Win32_ProcessStartTrace requires admin; silently degrade
+    }
+
+    private void OnProcessStarted(object sender, EventArrivedEventArgs e)
+    {
+        try
+        {
+            var name = e.NewEvent["ProcessName"]?.ToString()?.Replace(".exe", "", StringComparison.OrdinalIgnoreCase) ?? "";
+            var pid  = Convert.ToInt32(e.NewEvent["ProcessID"]);
+
+            // Check firefox/vlc immediately
+            if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("vlc", StringComparison.OrdinalIgnoreCase))
+            {
+                var proc = SafeGetProcess(pid);
+                if (proc is not null && !_appliedMediaZone.Contains(pid))
+                {
+                    ApplyMediaZone(proc);
+                    lock (_appliedMediaZone) _appliedMediaZone.Add(pid);
+                    LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
+                }
+                return;
+            }
+
+            // Check bg procs immediately
+            if (AllBgProcs.Any(b => b.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                var proc = SafeGetProcess(pid);
+                if (proc is not null)
+                {
+                    try
+                    {
+                        proc.PriorityClass = ProcessPriorityClass.BelowNormal;
+                        if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
+                        lock (_modifiedPids) _modifiedPids.Add(pid);
+                    }
+                    catch { }
+                }
+                return;
+            }
+
+            // Defer game path check to the next Scan() tick (needs path resolution)
+        }
+        catch { }
+    }
+
+    private void OnProcessStopped(object sender, EventArrivedEventArgs e)
+    {
+        try
+        {
+            var pid = Convert.ToInt32(e.NewEvent["ProcessID"]);
+            if (ActiveGames.TryGetValue(pid, out var name))
+            {
+                lock (ActiveGames) ActiveGames.Remove(pid);
+                LogEntry?.Invoke($"[ENDED] {name} closed (PID {pid}) (instant)");
+            }
+            lock (_appliedMediaZone) _appliedMediaZone.Remove(pid);
+            lock (_modifiedPids) _modifiedPids.Remove(pid);
+        }
+        catch { }
+    }
+
     public List<string> Scan()
     {
         var newGames = new List<string>();
@@ -74,14 +152,15 @@ public class ProcessManager
             {
                 if (ApplyGame(proc))
                 {
-                    ActiveGames[proc.Id] = proc.ProcessName;
+                    lock (ActiveGames) ActiveGames[proc.Id] = proc.ProcessName;
+                    lock (_modifiedPids) _modifiedPids.Add(proc.Id);
                     newGames.Add(proc.ProcessName);
                     LogEntry?.Invoke($"[GAME] DETECTED: {proc.ProcessName} (PID {proc.Id})");
                 }
             }
         }
 
-        // Re-apply affinity every loop to counter Process Lasso or other tools
+        // Re-apply affinity each scan to counter external tools
         if (PinningEnabled)
         {
             foreach (var pid in ActiveGames.Keys.ToList())
@@ -92,31 +171,29 @@ public class ProcessManager
             }
         }
 
-        // Detect exited games
-        var exited = new List<int>();
-        foreach (var (pid, name) in ActiveGames)
+        // Detect exited games (fallback for when WMI stop event is missed)
+        foreach (var pid in ActiveGames.Keys.ToList())
         {
             if (SafeGetProcess(pid) is null)
-                exited.Add(pid);
-        }
-        foreach (var pid in exited)
-        {
-            LogEntry?.Invoke($"[ENDED] {ActiveGames[pid]} closed (PID {pid})");
-            ActiveGames.Remove(pid);
+            {
+                LogEntry?.Invoke($"[ENDED] {ActiveGames[pid]} closed (PID {pid})");
+                lock (ActiveGames) ActiveGames.Remove(pid);
+            }
         }
 
-        // Pin new firefox + vlc
+        // Pin new firefox + vlc (fallback for when WMI start event is missed)
         foreach (var proc in SafeGetProcessesByName("firefox")
             .Concat(SafeGetProcessesByName("vlc")))
         {
             if (!_appliedMediaZone.Contains(proc.Id))
             {
                 ApplyMediaZone(proc);
-                _appliedMediaZone.Add(proc.Id);
+                lock (_appliedMediaZone) _appliedMediaZone.Add(proc.Id);
+                lock (_modifiedPids) _modifiedPids.Add(proc.Id);
                 LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
             }
         }
-        // Cleanup dead PIDs from tracking sets
+
         _appliedMediaZone.RemoveWhere(pid => SafeGetProcess(pid) is null);
         _pathFailCache.RemoveWhere(pid => SafeGetProcess(pid) is null);
 
@@ -125,7 +202,8 @@ public class ProcessManager
 
     public void ThrottleBg()
     {
-        foreach (var name in AllBgProcs)
+        // Parallel across process name lookups to avoid serial GetProcessesByName calls
+        Parallel.ForEach(AllBgProcs, name =>
         {
             foreach (var proc in SafeGetProcessesByName(name))
             {
@@ -133,29 +211,33 @@ public class ProcessManager
                 {
                     proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                     if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
+                    lock (_modifiedPids) _modifiedPids.Add(proc.Id);
                 }
                 catch { }
             }
-        }
+        });
     }
 
     public void ReleasePinning()
     {
-        foreach (var pid in ActiveGames.Keys)
+        // Only reset PIDs we actually modified - no full process scan needed
+        var pidsToReset = new List<int>();
+        lock (_modifiedPids) pidsToReset.AddRange(_modifiedPids);
+
+        Parallel.ForEach(pidsToReset, pid =>
         {
             var p = SafeGetProcess(pid);
-            if (p is null) continue;
-            try { p.ProcessorAffinity = _allCores; p.PriorityClass = ProcessPriorityClass.Normal; } catch { }
-        }
-        foreach (var proc in SafeGetProcessesByName("firefox").Concat(SafeGetProcessesByName("vlc")))
-        {
-            try { proc.ProcessorAffinity = _allCores; proc.PriorityClass = ProcessPriorityClass.Normal; } catch { }
-        }
-        foreach (var name in AllBgProcs)
-        {
-            foreach (var p in SafeGetProcessesByName(name))
-                try { p.ProcessorAffinity = _allCores; p.PriorityClass = ProcessPriorityClass.Normal; } catch { }
-        }
+            if (p is null) return;
+            try
+            {
+                p.ProcessorAffinity = _allCores;
+                if (p.PriorityClass == ProcessPriorityClass.BelowNormal ||
+                    p.PriorityClass == ProcessPriorityClass.High)
+                    p.PriorityClass = ProcessPriorityClass.Normal;
+            }
+            catch { }
+        });
+
         LogEntry?.Invoke("[PIN] CPU pinning DISABLED - all processes running on all cores");
     }
 
@@ -173,7 +255,8 @@ public class ProcessManager
             {
                 proc.ProcessorAffinity = FirefoxAffinity;
                 proc.PriorityClass = ProcessPriorityClass.Normal;
-                _appliedMediaZone.Add(proc.Id);
+                lock (_appliedMediaZone) _appliedMediaZone.Add(proc.Id);
+                lock (_modifiedPids) _modifiedPids.Add(proc.Id);
             }
             catch { }
         }
@@ -181,22 +264,26 @@ public class ProcessManager
         LogEntry?.Invoke("[PIN] CPU pinning ENABLED - affinities restored");
     }
 
-    // Restore everything to defaults (used on exit and in cleanup mode)
     public void RestoreAll()
     {
-        foreach (var proc in SafeGetProcesses())
+        var pidsToReset = new List<int>();
+        lock (_modifiedPids) pidsToReset.AddRange(_modifiedPids);
+
+        Parallel.ForEach(pidsToReset, pid =>
         {
-            if (proc.Id == Environment.ProcessId) continue;
+            if (pid == Environment.ProcessId) return;
+            var p = SafeGetProcess(pid);
+            if (p is null) return;
             try
             {
-                var aff = proc.ProcessorAffinity.ToInt64();
-                if (aff != _allCores.ToInt64()) proc.ProcessorAffinity = _allCores;
-                if (proc.PriorityClass == ProcessPriorityClass.BelowNormal ||
-                    proc.PriorityClass == ProcessPriorityClass.Idle)
-                    proc.PriorityClass = ProcessPriorityClass.Normal;
+                if (p.ProcessorAffinity.ToInt64() != _allCores.ToInt64())
+                    p.ProcessorAffinity = _allCores;
+                if (p.PriorityClass == ProcessPriorityClass.BelowNormal ||
+                    p.PriorityClass == ProcessPriorityClass.Idle)
+                    p.PriorityClass = ProcessPriorityClass.Normal;
             }
             catch { }
-        }
+        });
     }
 
     private bool ApplyGame(Process proc)
@@ -216,6 +303,7 @@ public class ProcessManager
         {
             proc.PriorityClass = ProcessPriorityClass.Normal;
             if (PinningEnabled) proc.ProcessorAffinity = FirefoxAffinity;
+            lock (_modifiedPids) _modifiedPids.Add(proc.Id);
         }
         catch { }
     }
@@ -270,5 +358,14 @@ public class ProcessManager
     private static IEnumerable<Process> SafeGetProcessesByName(string name)
     {
         try { return Process.GetProcessesByName(name); } catch { return []; }
+    }
+
+    public void Dispose()
+    {
+        _startWatcher?.Stop();
+        _startWatcher?.Dispose();
+        _stopWatcher?.Stop();
+        _stopWatcher?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

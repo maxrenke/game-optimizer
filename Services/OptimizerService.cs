@@ -1,6 +1,5 @@
 namespace GameOptimizer.Services;
 
-// Snapshot of all live data for the UI (immutable, thread-safe to pass to UI thread)
 public record OptimizerSnapshot(
     bool IsGaming,
     string GameName,
@@ -32,9 +31,13 @@ public class OptimizerService : IDisposable
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
-    private int _loopCount;
+    private int _scanCount;     // increments every 1s
     private DateTime _startTime;
     private int _prevAlertCount;
+
+    // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
+    private int[] _lastCoreData = [];
+    private GpuData? _lastGpu;
 
     public event Action<OptimizerSnapshot>? SnapshotReady;
     public event Action<string>? AlertFired;
@@ -76,6 +79,7 @@ public class OptimizerService : IDisposable
         _sys.EnableGamingOptimizations();
         _pm.Scan();
         _pm.ThrottleBg();
+        _pm.StartWmiWatcher();
         AddLog("[INIT] v4 started - optimizations applied");
         _loopTask = Task.Run(() => LoopAsync(_cts.Token));
     }
@@ -92,6 +96,7 @@ public class OptimizerService : IDisposable
         if (_sessions.Current is not null) _sessions.EndSession();
         _sys.DisableGamingOptimizations();
         _pm.RestoreAll();
+        _pm.Dispose();
     }
 
     public string SaveReport() => _sessions.SaveReport(_startTime);
@@ -103,25 +108,36 @@ public class OptimizerService : IDisposable
 
     private async Task LoopAsync(CancellationToken ct)
     {
+        // Kick off first WMI sample immediately so dashboard isn't blank
+        (_lastCoreData, _lastGpu) = await SampleHeavyAsync();
+
         while (!ct.IsCancellationRequested)
         {
-            _loopCount++;
-            try { await TickAsync(ct); } catch { }
+            _scanCount++;
 
-            // Re-throttle bg every ~60s (20 ticks x 3s)
-            if (_loopCount % 20 == 0) _pm.ThrottleBg();
+            try { await ScanTickAsync(); } catch { }
 
-            try { await Task.Delay(3000, ct); } catch (OperationCanceledException) { break; }
+            // Heavy WMI sampling every 3 scan ticks (3s cadence)
+            if (_scanCount % 3 == 0)
+            {
+                try
+                {
+                    (_lastCoreData, _lastGpu) = await SampleHeavyAsync();
+                }
+                catch { }
+            }
+
+            // Re-throttle bg every ~60s (60 ticks x 1s)
+            if (_scanCount % 60 == 0)
+                _ = Task.Run(() => _pm.ThrottleBg());
+
+            try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { break; }
         }
     }
 
-    private async Task TickAsync(CancellationToken ct)
+    // Fast path: process scan + network sample + snapshot emit (runs every 1s)
+    private async Task ScanTickAsync()
     {
-        // Parallel data collection
-        var cpuTask = CpuMonitor.SampleAsync();
-        var gpuTask = GpuMonitor.GetDataAsync();
-
-        // Process management (sync, but fast)
         var newGames = _pm.Scan();
         foreach (var g in newGames)
         {
@@ -132,10 +148,8 @@ public class OptimizerService : IDisposable
 
         _net.Sample();
 
-        await Task.WhenAll(cpuTask, gpuTask);
-
-        var coreData = await cpuTask;
-        var gpu = await gpuTask;
+        var coreData = _lastCoreData;
+        var gpu = _lastGpu;
 
         var gamePct = CpuMonitor.ZonePct(coreData, _cfg.GameAffinityMask);
         var ffPct   = CpuMonitor.ZonePct(coreData, _cfg.FirefoxAffinityMask);
@@ -176,6 +190,16 @@ public class OptimizerService : IDisposable
             ReportCount: ReportCount());
 
         SnapshotReady?.Invoke(snap);
+        await Task.CompletedTask;
+    }
+
+    // Slow path: WMI CPU + GPU (runs every 3s)
+    private static async Task<(int[] coreData, GpuData? gpu)> SampleHeavyAsync()
+    {
+        var cpuTask = CpuMonitor.SampleAsync();
+        var gpuTask = GpuMonitor.GetDataAsync();
+        await Task.WhenAll(cpuTask, gpuTask);
+        return (await cpuTask, await gpuTask);
     }
 
     private void AddLog(string msg)
