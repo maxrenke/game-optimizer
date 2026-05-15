@@ -73,6 +73,50 @@ public class OptimizerConfigTests
     }
 
     [Fact]
+    public void DefaultConfig_StartFlags_AreFalse()
+    {
+        var cfg = new OptimizerConfig();
+        Assert.False(cfg.StartMinimized);
+        Assert.False(cfg.StartWithWindows);
+    }
+
+    [Fact]
+    public void StartFlags_RoundTripThroughJson()
+    {
+        var cfg = new OptimizerConfig { StartMinimized = true, StartWithWindows = true };
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.True(loaded.StartMinimized);
+        Assert.True(loaded.StartWithWindows);
+    }
+
+    [Fact]
+    public void GamePaths_RoundTripThroughJson()
+    {
+        var cfg = new OptimizerConfig();
+        cfg.GamePaths = [@"C:\Games\Steam", @"C:\Games\Epic"];
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Equal(2, loaded.GamePaths.Count);
+        Assert.Contains(@"C:\Games\Steam", loaded.GamePaths);
+        Assert.Contains(@"C:\Games\Epic", loaded.GamePaths);
+    }
+
+    [Fact]
+    public void ExtraThrottledProcs_RoundTripThroughJson()
+    {
+        var cfg = new OptimizerConfig();
+        cfg.ExtraThrottledProcs = ["slack", "discord"];
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Contains("slack", loaded.ExtraThrottledProcs);
+        Assert.Contains("discord", loaded.ExtraThrottledProcs);
+    }
+
+    [Fact]
     public void Load_ReturnsDefault_WhenFileIsCorrupt()
     {
         var tmpPath = Path.Combine(Path.GetTempPath(), $"corrupt_config_{Guid.NewGuid():N}.json");

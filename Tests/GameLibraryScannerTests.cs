@@ -50,4 +50,46 @@ public class GameLibraryScannerTests
         foreach (var path in result)
             Assert.True(Directory.Exists(path), $"Path does not exist: {path}");
     }
+
+    [Fact]
+    public void ScanUbisoft_DoesNotThrow()
+    {
+        var result = GameLibraryScanner.ScanUbisoft().ToList();
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void ScanUbisoft_AllReturnedPathsExist()
+    {
+        foreach (var path in GameLibraryScanner.ScanUbisoft())
+            Assert.True(Directory.Exists(path), $"Ubisoft path does not exist: {path}");
+    }
+
+    [Fact]
+    public void ScanEa_DoesNotThrow()
+    {
+        var result = GameLibraryScanner.ScanEa().ToList();
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void ScanEa_AllReturnedPathsExist()
+    {
+        foreach (var path in GameLibraryScanner.ScanEa())
+            Assert.True(Directory.Exists(path), $"EA path does not exist: {path}");
+    }
+
+    [Fact]
+    public void ScanAll_IncludesUbisoftAndEaPaths()
+    {
+        // ScanAll should incorporate results from all five scanners without duplicates
+        var all = GameLibraryScanner.ScanAll();
+        var ubisoft = GameLibraryScanner.ScanUbisoft().ToList();
+        var ea = GameLibraryScanner.ScanEa().ToList();
+
+        foreach (var p in ubisoft.Where(Directory.Exists))
+            Assert.Contains(all, x => x.Equals(p, StringComparison.OrdinalIgnoreCase));
+        foreach (var p in ea.Where(Directory.Exists))
+            Assert.Contains(all, x => x.Equals(p, StringComparison.OrdinalIgnoreCase));
+    }
 }
