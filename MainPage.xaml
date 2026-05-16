@@ -17,7 +17,7 @@
         </DataTemplate>
     </Page.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
         <StackPanel Spacing="8" Padding="16,8,16,16">
 
             <!-- ── Status bar ─────────────────────────────────────── -->
@@ -168,6 +168,10 @@
                                        Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
                                            Converter={StaticResource PctToColorConverter}}" />
                         </Grid>
+
+                        <!-- CPU game-zone 1-min history -->
+                        <TextBlock Text="1m history" FontSize="9" Opacity="0.4" CharacterSpacing="60" />
+                        <Canvas x:Name="CpuSparklineCanvas" Height="28" />
                     </StackPanel>
                 </Border>
 
@@ -272,6 +276,14 @@
                                    FontSize="12" Opacity="0.5"
                                    Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
                                        Converter={StaticResource InvertBoolToVisibilityConverter}}" />
+
+                        <!-- GPU util 1-min history -->
+                        <TextBlock Text="1m history" FontSize="9" Opacity="0.4" CharacterSpacing="60"
+                                   Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                       Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <Canvas x:Name="GpuSparklineCanvas" Height="28"
+                                Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                    Converter={StaticResource BoolToVisibilityConverter}}" />
                     </StackPanel>
                 </Border>
             </Grid>
@@ -354,8 +366,19 @@
                     <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
                 </Border.Background>
                 <StackPanel Spacing="6">
-                    <TextBlock Text="NETWORK  (30s history)" FontSize="11" Opacity="0.6"
-                               FontWeight="SemiBold" CharacterSpacing="100" />
+                    <Grid>
+                        <TextBlock x:Name="NetHistoryLabel" Text="NETWORK  (30s history)" FontSize="11"
+                                   Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100"
+                                   VerticalAlignment="Center" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="3">
+                            <ToggleButton x:Name="Hist30sBtn" Tag="30" Content="30s" IsChecked="True"
+                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                            <ToggleButton x:Name="Hist2mBtn"  Tag="120" Content="2m"
+                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                            <ToggleButton x:Name="Hist5mBtn"  Tag="300" Content="5m"
+                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                        </StackPanel>
+                    </Grid>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220"/>
@@ -445,7 +468,9 @@
                               MaxHeight="320"
                               SelectionMode="None"
                               IsItemClickEnabled="False"
-                              ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ScrollViewer.IsVerticalScrollChainingEnabled="True"
+                              ScrollViewer.IsScrollInertiaEnabled="True" />
                 </StackPanel>
             </Border>
 

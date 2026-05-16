@@ -69,8 +69,13 @@ public partial class App : Application
                 MainViewModel.ApplySnapshot(snap);
                 if (TrayService is not null)
                 {
-                    TrayService.PinEnabled  = snap.PinningEnabled;
-                    TrayService.CurrentGame = snap.IsGaming ? snap.GameName : null;
+                    TrayService.PinEnabled    = snap.PinningEnabled;
+                    TrayService.CurrentGame   = snap.IsGaming ? snap.GameName : null;
+                    TrayService.GameCpuPct    = snap.GameCpuPct;
+                    TrayService.GpuAvailable  = snap.Gpu is not null;
+                    TrayService.GpuUtil       = snap.Gpu?.GpuUtil ?? 0;
+                    TrayService.GpuTempC      = snap.Gpu?.Temp ?? 0;
+                    TrayService.RxNowKbps     = snap.RxNow;
                 }
             };
             svc.AlertFired += msg => TrayService?.ShowBalloon(msg);
@@ -81,9 +86,12 @@ public partial class App : Application
 
     private static void ShowTrayStatus()
     {
-        var msg = $"{(MainViewModel.IsGaming ? $"Gaming: {MainViewModel.GameName}" : "Idle")}  |  " +
-                  $"{(MainViewModel.PinningEnabled ? "Pinning ON" : "Pinning OFF")}  |  " +
-                  $"{DateTime.Now:HH:mm}";
+        var vm = MainViewModel;
+        var gpu = vm.GpuAvailable ? $"  GPU {vm.GpuUtil}% {vm.GpuTempC}C" : "";
+        var net = vm.RxNow >= 1024 ? $"  RX {vm.RxNow / 1024.0:F1}MB/s" : $"  RX {vm.RxNow}KB/s";
+        var msg = $"{(vm.IsGaming ? $"Gaming: {vm.GameName}" : "Idle")}  " +
+                  $"CPU {vm.GameCpuPct}%{gpu}{net}  " +
+                  $"{(vm.PinningEnabled ? "PIN ON" : "PIN OFF")}";
         TrayService?.ShowBalloon(msg);
     }
 

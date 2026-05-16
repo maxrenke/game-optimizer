@@ -16,11 +16,17 @@ public class TrayService : IDisposable
     private const uint LR_LOADFROMFILE = 0x10;
 
     private TaskbarIcon? _icon;
+    private TrayStatsControl? _statsPopup;
     private readonly DispatcherQueue _dispatcher;
 
     public bool PinEnabled { get; set; } = true;
     public bool WindowVisible { get; set; } = true;
     public string? CurrentGame { get; set; }
+    public int GameCpuPct { get; set; }
+    public int GpuUtil { get; set; }
+    public int GpuTempC { get; set; }
+    public int RxNowKbps { get; set; }
+    public bool GpuAvailable { get; set; }
 
     private string? _pendingBalloon;
 
@@ -38,10 +44,13 @@ public class TrayService : IDisposable
     {
         _dispatcher.TryEnqueue(() =>
         {
+            _statsPopup = new TrayStatsControl();
+
             _icon = new TaskbarIcon
             {
                 IconSource = new BitmapImage(new Uri("ms-appx:///Assets/AppIcon.ico")),
                 ToolTipText = "Gaming Optimizer - Idle",
+                TrayPopup = _statsPopup,
             };
 
             var pinItem = new MenuFlyoutItem { Text = "CPU Pinning: ON" };
@@ -72,10 +81,16 @@ public class TrayService : IDisposable
             timer.Tick += (_, _) =>
             {
                 var pin = PinEnabled ? "PIN ON" : "PIN OFF";
-                var tip = CurrentGame is not null ? $"Gaming: {CurrentGame} | {pin}" : $"Idle | {pin}";
-                _icon.ToolTipText = tip[..Math.Min(63, tip.Length)];
+                var gpuPart = GpuAvailable ? $" | GPU {GpuUtil}% {GpuTempC}C" : "";
+                var tip = CurrentGame is not null
+                    ? $"Gaming: {CurrentGame} | CPU {GameCpuPct}%{gpuPart} | {pin}"
+                    : $"Idle | CPU {GameCpuPct}%{gpuPart} | {pin}";
+                _icon.ToolTipText = tip[..Math.Min(127, tip.Length)];
                 pinItem.Text = $"CPU Pinning: {(PinEnabled ? "ON" : "OFF")}";
                 windowItem.Text = WindowVisible ? "Hide to Tray" : "Show Window";
+
+                _statsPopup?.Update(CurrentGame is not null, CurrentGame ?? "-",
+                    GameCpuPct, GpuAvailable ? GpuUtil : -1, GpuTempC, RxNowKbps, PinEnabled);
 
                 if (_pendingBalloon is not null)
                 {
@@ -88,7 +103,7 @@ public class TrayService : IDisposable
 
             _icon.ForceCreate(false);
 
-            // Load real Win32 HICON - BitmapImage only feeds the WinUI render pipeline
+            // Load real Win32 HICON for taskbar
             var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
             if (System.IO.File.Exists(icoPath))
             {

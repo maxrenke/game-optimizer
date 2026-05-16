@@ -4,7 +4,7 @@ namespace GameOptimizer.Services;
 
 public class NetworkMonitor
 {
-    private const int HistorySize = 30;
+    public const int HistorySize = 300;
 
     private readonly int[] _rxHistory = new int[HistorySize];
     private readonly int[] _txHistory = new int[HistorySize];

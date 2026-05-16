@@ -19,7 +19,9 @@ public record OptimizerSnapshot(
     GameSession? CurrentSession,
     IReadOnlyList<string> GameProcesses,
     IReadOnlyList<string> MediaProcesses,
-    IReadOnlyList<string> BgProcesses);
+    IReadOnlyList<string> BgProcesses,
+    int[] GameCpuHistory, int GameCpuHistoryIndex,
+    int[] GpuUtilHistory, int GpuUtilHistoryIndex);
 
 public class OptimizerService : IDisposable
 {
@@ -42,6 +44,12 @@ public class OptimizerService : IDisposable
     // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
     private int[] _lastCoreData = [];
     private GpuData? _lastGpu;
+
+    // 60-sample (1-minute) CPU and GPU history, written every tick
+    private const int CpuGpuHistorySize = 60;
+    private readonly int[] _cpuGameHistory = new int[CpuGpuHistorySize];
+    private readonly int[] _gpuUtilHistory = new int[CpuGpuHistorySize];
+    private int _cgHistIdx;
 
     public event Action<OptimizerSnapshot>? SnapshotReady;
     public event Action<string>? AlertFired;
@@ -159,6 +167,10 @@ public class OptimizerService : IDisposable
         var ffPct   = CpuMonitor.ZonePct(coreData, _cfg.FirefoxAffinityMask);
         var bgPct   = CpuMonitor.ZonePct(coreData, _cfg.BgAffinityMask);
 
+        _cpuGameHistory[_cgHistIdx] = gamePct;
+        _gpuUtilHistory[_cgHistIdx] = gpu?.GpuUtil ?? 0;
+        _cgHistIdx = (_cgHistIdx + 1) % CpuGpuHistorySize;
+
         _bottleneck.Update(gamePct, gpu, _pm.ActiveGames.Count > 0);
         if (_sessions.Current is not null)
             _sessions.Update(gamePct, gpu, _bottleneck.Current);
@@ -195,7 +207,11 @@ public class OptimizerService : IDisposable
             CurrentSession: _sessions.Current,
             GameProcesses: _pm.GameProcessNames,
             MediaProcesses: _pm.MediaProcessNames,
-            BgProcesses: _pm.BgProcessNames);
+            BgProcesses: _pm.BgProcessNames,
+            GameCpuHistory: (int[])_cpuGameHistory.Clone(),
+            GameCpuHistoryIndex: _cgHistIdx,
+            GpuUtilHistory: (int[])_gpuUtilHistory.Clone(),
+            GpuUtilHistoryIndex: _cgHistIdx);
 
         SnapshotReady?.Invoke(snap);
         await Task.CompletedTask;

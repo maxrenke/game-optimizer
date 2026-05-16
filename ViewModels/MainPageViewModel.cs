@@ -43,9 +43,16 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial int TxNow { get; set; }
     [ObservableProperty] public partial int RxPeak { get; set; }
     [ObservableProperty] public partial int TxPeak { get; set; }
-    [ObservableProperty] public partial int[] RxHistory { get; set; } = new int[30];
-    [ObservableProperty] public partial int[] TxHistory { get; set; } = new int[30];
+    [ObservableProperty] public partial int[] RxHistory { get; set; } = new int[NetworkMonitor.HistorySize];
+    [ObservableProperty] public partial int[] TxHistory { get; set; } = new int[NetworkMonitor.HistorySize];
     [ObservableProperty] public partial int NetHistoryIndex { get; set; }
+    [ObservableProperty] public partial int HistoryWindowSeconds { get; set; } = 30;
+
+    // ── CPU/GPU History ────────────────────────────────────────
+    [ObservableProperty] public partial int[] GameCpuHistory { get; set; } = new int[60];
+    [ObservableProperty] public partial int GameCpuHistoryIndex { get; set; }
+    [ObservableProperty] public partial int[] GpuUtilHistory { get; set; } = new int[60];
+    [ObservableProperty] public partial int GpuUtilHistoryIndex { get; set; }
 
     // ── Bottleneck ─────────────────────────────────────────────
     [ObservableProperty] public partial BottleneckState Bottleneck { get; set; } = BottleneckState.None;
@@ -114,6 +121,11 @@ public partial class MainPageViewModel : ObservableObject
             RxHistory = s.RxHistory; TxHistory = s.TxHistory;
             NetHistoryIndex = s.HistoryIndex;
 
+            GameCpuHistory = s.GameCpuHistory;
+            GameCpuHistoryIndex = s.GameCpuHistoryIndex;
+            GpuUtilHistory = s.GpuUtilHistory;
+            GpuUtilHistoryIndex = s.GpuUtilHistoryIndex;
+
             Bottleneck = s.Bottleneck;
             (BottleneckLabel, BottleneckBrush) = s.Bottleneck switch
             {
@@ -132,9 +144,14 @@ public partial class MainPageViewModel : ObservableObject
             HasAlert = s.Alerts.Count > 0;
             AlertText = s.Alerts.Count > 0 ? s.Alerts[0] : "All zones healthy";
 
-            LogLines.Clear();
-            foreach (var l in s.Log)
-                LogLines.Add(new LogLine(l));
+            // Only rebuild if log content changed - avoids triggering scroll on every tick
+            bool logChanged = LogLines.Count != s.Log.Count ||
+                              (s.Log.Count > 0 && (LogLines.Count == 0 || LogLines[^1].Text != s.Log[^1]));
+            if (logChanged)
+            {
+                LogLines.Clear();
+                foreach (var l in s.Log) LogLines.Add(new LogLine(l));
+            }
 
             ReportCount = s.ReportCount;
 

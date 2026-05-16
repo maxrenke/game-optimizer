@@ -25,11 +25,12 @@ public class NetworkMonitorTests
     }
 
     [Fact]
-    public void HistoryArrays_Are30Elements()
+    public void HistoryArrays_Are300Elements()
     {
         var mon = new NetworkMonitor("NonExistentNic_XYZ_12345");
-        Assert.Equal(30, mon.RxHistory.Length);
-        Assert.Equal(30, mon.TxHistory.Length);
+        Assert.Equal(NetworkMonitor.HistorySize, mon.RxHistory.Length);
+        Assert.Equal(NetworkMonitor.HistorySize, mon.TxHistory.Length);
+        Assert.Equal(300, NetworkMonitor.HistorySize);
     }
 
     [Fact]
