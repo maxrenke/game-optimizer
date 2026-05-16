@@ -109,7 +109,9 @@ public class AlertToColorConverter : IValueConverter
 public class PinToTextConverter : IValueConverter
 {
     public object Convert(object value, Type t, object p, string l) =>
-        value is bool b && b ? "Pinning ON" : "Pinning OFF";
+        value is bool b && b
+            ? "Affinities active - processes pinned to assigned CPU zones"
+            : "Affinities inactive - all processes running on all cores";
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 

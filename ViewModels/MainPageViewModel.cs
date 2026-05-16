@@ -155,9 +155,18 @@ public partial class MainPageViewModel : ObservableObject
 
             ReportCount = s.ReportCount;
 
-            GameZoneProcs  = s.GameProcesses.Count  > 0 ? string.Join("\n", s.GameProcesses)  : "(none)";
-            MediaZoneProcs = s.MediaProcesses.Count > 0 ? string.Join("\n", s.MediaProcesses) : "(none)";
-            BgZoneProcs    = s.BgProcesses.Count    > 0 ? string.Join("\n", s.BgProcesses)    : "(none)";
+            if (s.PinningEnabled)
+            {
+                GameZoneProcs  = s.GameProcesses.Count  > 0 ? string.Join("\n", s.GameProcesses)  : "(none)";
+                MediaZoneProcs = s.MediaProcesses.Count > 0 ? string.Join("\n", s.MediaProcesses) : "(none)";
+                BgZoneProcs    = s.BgProcesses.Count    > 0 ? string.Join("\n", s.BgProcesses)    : "(none)";
+            }
+            else
+            {
+                GameZoneProcs  = "(pinning off)";
+                MediaZoneProcs = "(pinning off)";
+                BgZoneProcs    = "(pinning off)";
+            }
 
             if (s.CurrentSession is not null)
             {
