@@ -20,7 +20,7 @@ When a game starts, Gaming Optimizer instantly:
 - **Tweaks Win32PrioritySeparation** to short fixed quanta, eliminating the foreground boost penalty
 - **Suspends SysMain (Superfetch)** - pointless on NVMe, actively harmful under memory pressure
 
-When the game closes, everything is restored to its original state.
+When the game closes, all processes are restored to their original affinities and priorities, PDH handles are closed, and system settings are reverted.
 
 ---
 
@@ -29,7 +29,8 @@ When the game closes, everything is restored to its original state.
 ### Real-time Dashboard
 - Per-zone CPU utilization (Game zone / Firefox+VLC zone / Background zone)
 - GPU metrics: utilization, VRAM, temperature, power draw, core/mem clocks
-- 30-second network sparkline (RX/TX KB/s with peak tracking)
+- Network sparkline (RX/TX KB/s) with configurable window: 30s / 2m / 5m
+- 1-minute CPU game-zone sparkline and GPU utilization sparkline
 - Bottleneck detector: CPU-bound / GPU-bound / Balanced / Headroom
 - Active zone process list - see exactly which processes are in each affinity zone
 - Event log with color-coded entries
@@ -41,8 +42,9 @@ When the game closes, everything is restored to its original state.
 - **Fallback polling** every 1s catches anything WMI misses
 
 ### System Tray
-- Real-time tooltip: `Gaming: Elden Ring | PIN ON`
-- Balloon notifications for thermal/utilization alerts
+- Real-time tooltip: `Gaming: Elden Ring | CPU 72% | GPU 94% 68C | PIN ON`
+- Double-click to show/hide window; right-click for context menu
+- Balloon notifications for thermal/utilization alerts and tray status
 - Toggle pinning, show status, or exit without opening the window
 
 ### Session Reports
@@ -61,41 +63,46 @@ When the game closes, everything is restored to its original state.
 
 ```
 GameOptimizer/
-├── Services/
-│   ├── OptimizerService.cs      # Orchestrator: 1s scan tick + 3s heavy tick
-│   ├── ProcessManager.cs        # Affinity/priority + WMI event watchers
-│   ├── CpuMonitor.cs            # PDH API per-core sampling (~5ms, persistent query)
-│   ├── GpuMonitor.cs            # NVML / NvAPI GPU metrics
-│   ├── NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer
-│   ├── SystemService.cs         # Win32PrioritySeparation, SysMain, timeBeginPeriod
-│   ├── SessionTracker.cs        # Per-game session stats + report generation
-│   ├── BottleneckDetector.cs    # CPU vs GPU saturation heuristic
-│   ├── AlertMonitor.cs          # Threshold-based thermal/utilization alerts
-│   ├── AffinityCalculator.cs    # P/E-core detection, zone mask generation
-│   ├── GameLibraryScanner.cs    # Steam/Epic/GOG/Ubisoft/EA path discovery
-│   └── OptimizerConfig.cs       # JSON config with auto-detect on first run
-├── ViewModels/
-│   ├── MainPageViewModel.cs     # CommunityToolkit.Mvvm, ApplySnapshot
-│   └── SettingsViewModel.cs     # Config editing + schtasks wiring
-├── Tray/
-│   └── TrayService.cs           # H.NotifyIcon.WinUI, Win32 HICON via LoadImage
-├── Converters/
-│   └── Converters.cs            # IValueConverter implementations
-├── Tests/
-│   ├── AffinityCalculatorTests.cs
-│   ├── CpuMonitorTests.cs
-│   ├── BottleneckDetectorTests.cs
-│   ├── AlertMonitorTests.cs
-│   ├── NetworkMonitorTests.cs
-│   └── SessionTrackerTests.cs
-└── .github/workflows/ci.yml     # xUnit on windows-latest, .NET 10 preview
+- Services/
+  - OptimizerService.cs      # Orchestrator: 1s scan tick + 3s heavy tick
+  - ProcessManager.cs        # Affinity/priority + WMI event watchers
+  - CpuMonitor.cs            # PDH API per-core sampling (~5ms, persistent query)
+  - GpuMonitor.cs            # nvidia-smi -> rocm-smi -> WDDM WMI fallback
+  - NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer (300 samples / 5 min)
+  - SystemService.cs         # Win32PrioritySeparation, SysMain, timeBeginPeriod
+  - SessionTracker.cs        # Per-game session stats + report generation
+  - BottleneckDetector.cs    # 5-sample rolling CPU vs GPU saturation heuristic
+  - AlertMonitor.cs          # Threshold-based thermal/utilization alerts
+  - AffinityCalculator.cs    # P/E-core detection, zone mask generation
+  - GameLibraryScanner.cs    # Steam/Epic/GOG/Ubisoft/EA path discovery
+  - OptimizerConfig.cs       # JSON config with auto-detect on first run
+- ViewModels/
+  - MainPageViewModel.cs     # CommunityToolkit.Mvvm, ApplySnapshot
+  - SettingsViewModel.cs     # Config editing + schtasks wiring
+- Tray/
+  - TrayService.cs           # H.NotifyIcon.WinUI, Win32 HICON via LoadImage
+- Converters/
+  - Converters.cs            # IValueConverter implementations
+- Tests/
+  - AffinityCalculatorTests.cs
+  - AlertMonitorTests.cs
+  - BottleneckDetectorTests.cs
+  - CpuMonitorTests.cs
+  - GameLibraryScannerTests.cs
+  - NetworkMonitorTests.cs
+  - OptimizerConfigTests.cs
+  - ProcessManagerTests.cs
+  - SessionTrackerTests.cs
+- .github/workflows/ci.yml  # xUnit on windows-latest, .NET 10
 ```
 
-**Loop design:** `OptimizerService` runs two interleaved tasks. The fast path (every 1s) does process scanning, network sampling, bottleneck update, and snapshot emission. The slow path (every 3s) calls the PDH CPU query and GPU monitor - both are I/O-bound and would stall the fast path if run every second.
+**Loop design:** `OptimizerService` runs two interleaved tasks. The fast path (every 1s) does process scanning, network sampling, bottleneck update, and snapshot emission. The slow path (every 3s) calls the PDH CPU query and GPU monitor - both are I/O-bound and would stall the fast path if run every second. GPU subprocess calls (`nvidia-smi`, `rocm-smi`) have a 3-second timeout with `proc.Kill()` on expiry so a hung driver never blocks the loop.
 
-**Thread safety:** All cross-thread state uses `ConcurrentDictionary`. WMI event callbacks fire on a WMI thread pool; the main scan loop runs on a `Task.Run` thread. No locks needed in the hot path.
+**Thread safety:** All cross-thread process state uses `ConcurrentDictionary`. The event log uses `ConcurrentQueue` - WMI event callbacks (start/stop trace) enqueue log entries from WMI thread pool threads concurrently with the main loop reading them. No locks needed in the hot path.
 
-**PDH vs WMI:** WMI `Win32_PerfFormattedData_PerfOS_Processor` takes 300-500ms per query (COM overhead + kernel round-trip). The PDH API with a persistent open query takes ~5ms - a 60-100x improvement that unlocks true 1s cadence for everything.
+**Clean exit:** On stop, the service cancels the loop token, waits up to 10s for the loop task, then runs cleanup: restores all process affinities and priorities (including game processes raised to High), calls `timeEndPeriod(1)`, restores Win32PrioritySeparation, restarts SysMain if it was stopped, closes the PDH query handle, and disposes WMI watchers. An `Interlocked` flag prevents double-cleanup when `Stop()` is called before `Dispose()`.
+
+**PDH vs WMI:** WMI `Win32_PerfFormattedData_PerfOS_Processor` takes 300-500ms per query (COM overhead + kernel round-trip). The PDH API with a persistent open query takes ~5ms - a 60-100x improvement that unlocks true 1s cadence for everything else.
 
 ---
 
@@ -108,11 +115,12 @@ GameOptimizer/
 | MVVM | CommunityToolkit.Mvvm 8.4 |
 | System tray | H.NotifyIcon.WinUI 2.4 |
 | CPU sampling | PDH API (P/Invoke) |
+| GPU sampling | nvidia-smi CLI / rocm-smi CLI / WDDM WMI |
 | Process events | WMI Win32_ProcessStartTrace |
 | Timer resolution | winmm.dll timeBeginPeriod |
 | Affinity | kernel32.dll SetProcessAffinityMask |
 | Tray icon | user32.dll LoadImage (real Win32 HICON) |
-| Tests | xUnit 2.9 / 49 tests |
+| Tests | xUnit 2.9 / 82 tests |
 | CI | GitHub Actions (windows-latest) |
 
 ---
