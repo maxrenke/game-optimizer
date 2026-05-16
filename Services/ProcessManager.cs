@@ -288,7 +288,8 @@ public class ProcessManager : IDisposable
                 if (p.ProcessorAffinity.ToInt64() != _allCores.ToInt64())
                     p.ProcessorAffinity = _allCores;
                 if (p.PriorityClass == ProcessPriorityClass.BelowNormal ||
-                    p.PriorityClass == ProcessPriorityClass.Idle)
+                    p.PriorityClass == ProcessPriorityClass.Idle ||
+                    p.PriorityClass == ProcessPriorityClass.High)
                     p.PriorityClass = ProcessPriorityClass.Normal;
             }
             catch { }
@@ -326,9 +327,15 @@ public class ProcessManager : IDisposable
         {
             try
             {
-                var q = new ManagementObjectSearcher("root\\cimv2",
+                using var q = new ManagementObjectSearcher("root\\cimv2",
                     $"SELECT ExecutablePath FROM Win32_Process WHERE ProcessId={proc.Id}");
-                path = q.Get().Cast<ManagementObject>().FirstOrDefault()?["ExecutablePath"]?.ToString();
+                using var results = q.Get();
+                foreach (ManagementObject mo in results)
+                {
+                    path = mo["ExecutablePath"]?.ToString();
+                    mo.Dispose();
+                    break;
+                }
             }
             catch { }
         }

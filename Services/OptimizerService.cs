@@ -32,7 +32,7 @@ public class OptimizerService : IDisposable
     private readonly SessionTracker _sessions;
     private readonly BottleneckDetector _bottleneck;
     private readonly AlertMonitor _alerts;
-    private readonly System.Collections.Generic.Queue<string> _log = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _log = new();
     private const int LogMax = 25;
 
     private CancellationTokenSource? _cts;
@@ -109,6 +109,7 @@ public class OptimizerService : IDisposable
         _sys.DisableGamingOptimizations();
         _pm.RestoreAll();
         _pm.Dispose();
+        CpuMonitor.Cleanup();
     }
 
     public string SaveReport() => _sessions.SaveReport(_startTime);
@@ -141,7 +142,7 @@ public class OptimizerService : IDisposable
 
             // Re-throttle bg every ~60s (60 ticks x 1s)
             if (_scanCount % 60 == 0)
-                _ = Task.Run(() => _pm.ThrottleBg());
+                await Task.Run(() => _pm.ThrottleBg(), ct);
 
             try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { break; }
         }
@@ -230,7 +231,7 @@ public class OptimizerService : IDisposable
     {
         var ts = DateTime.Now.ToString("HH:mm:ss");
         _log.Enqueue($"[{ts}] {msg}");
-        while (_log.Count > LogMax) _log.Dequeue();
+        while (_log.Count > LogMax) _log.TryDequeue(out _);
     }
 
     public void Dispose() { Stop(); GC.SuppressFinalize(this); }

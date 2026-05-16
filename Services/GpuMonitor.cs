@@ -93,13 +93,15 @@ public static class GpuMonitor
     {
         try
         {
-            var query = new ManagementObjectSearcher(
+            using var query = new ManagementObjectSearcher(
                 @"root\cimv2",
                 @"SELECT * FROM Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine WHERE Name LIKE '%_3D'");
+            using var objs = query.Get();
             double maxUtil = 0;
-            foreach (ManagementObject obj in query.Get())
+            foreach (ManagementObject obj in objs)
             {
-                if (obj["UtilizationPercentage"] is ulong u && u > maxUtil) maxUtil = u;
+                using var o = obj;
+                if (o["UtilizationPercentage"] is ulong u && u > maxUtil) maxUtil = u;
             }
             long vramBytes = 0;
             try

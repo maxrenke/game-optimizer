@@ -42,7 +42,7 @@ public class SystemService
         // Suspend SysMain (Superfetch) - useless on NVMe
         try
         {
-            var svc = new ServiceController("SysMain");
+            using var svc = new ServiceController("SysMain");
             if (svc.StartType != ServiceStartMode.Disabled && svc.Status == ServiceControllerStatus.Running)
             {
                 _sysMainOriginalStart = svc.StartType;
@@ -78,7 +78,7 @@ public class SystemService
             try
             {
                 var startType = _sysMainOriginalStart ?? ServiceStartMode.Automatic;
-                var svc = new ServiceController("SysMain");
+                using var svc = new ServiceController("SysMain");
                 ServiceHelper.ChangeStartMode(svc, startType);
                 svc.Start();
                 LogEntry?.Invoke($"[SYS] SysMain restarted (StartType restored to {startType})");

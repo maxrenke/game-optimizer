@@ -16,6 +16,9 @@ public static class CpuMonitor
     [DllImport("pdh.dll")]
     private static extern int PdhGetFormattedCounterValue(nint counterHandle, uint format, out int counterType, out PdhFmtCounterValue value);
 
+    [DllImport("pdh.dll")]
+    private static extern int PdhCloseQuery(nint queryHandle);
+
     [StructLayout(LayoutKind.Explicit)]
     private struct PdhFmtCounterValue
     {
@@ -43,6 +46,17 @@ public static class CpuMonitor
                 PdhAddEnglishCounterW(_query, $"\\Processor({i})\\% Processor Time", 0, out _counters[i]);
             PdhCollectQueryData(_query); // seed baseline - first call has no history
             _ready = true;
+        }
+    }
+
+    public static void Cleanup()
+    {
+        lock (_initLock)
+        {
+            if (!_ready) return;
+            PdhCloseQuery(_query);
+            _query = 0;
+            _ready = false;
         }
     }
 

@@ -90,4 +90,20 @@ public class CpuMonitorTests
         long mask = 0b1010;
         Assert.Equal(70, CpuMonitor.ZonePct(data, mask));
     }
+
+    [Fact]
+    public void Cleanup_BeforeInit_DoesNotThrow()
+    {
+        // Static state may or may not be initialized from other tests - just verify no exception
+        var ex = Record.Exception(() => CpuMonitor.Cleanup());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Cleanup_Idempotent_DoesNotThrow()
+    {
+        CpuMonitor.Cleanup();
+        var ex = Record.Exception(() => CpuMonitor.Cleanup());
+        Assert.Null(ex);
+    }
 }
