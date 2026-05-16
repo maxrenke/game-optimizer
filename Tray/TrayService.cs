@@ -70,8 +70,6 @@ public class TrayService : IDisposable
             menu.Items.Add(exitItem);
 
             _icon.ContextFlyout = menu;
-            // Left-click shows stats balloon; double-click toggles window
-            _icon.LeftClickCommand = new RelayCommand(() => ShowStatusRequested?.Invoke());
             _icon.DoubleClickCommand = new RelayCommand(() => ToggleWindowRequested?.Invoke());
 
             var timer = _dispatcher.CreateTimer();

@@ -105,11 +105,15 @@ public partial class App : Application
 
     public static void RequestExit()
     {
-        UIDispatcher.TryEnqueue(() =>
+        // Stop() blocks up to 10s waiting for the service loop - run off the UI thread
+        Task.Run(() =>
         {
             OptimizerService?.Stop();
-            TrayService?.Dispose();
-            Microsoft.UI.Xaml.Application.Current.Exit();
+            UIDispatcher.TryEnqueue(() =>
+            {
+                TrayService?.Dispose();
+                Microsoft.UI.Xaml.Application.Current.Exit();
+            });
         });
     }
 }
