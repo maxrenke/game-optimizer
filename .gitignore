@@ -10,3 +10,4 @@ BundleArtifacts/
 Package.StoreAssociation.xml
 _pkginfo.txt
 *.appxsym
+.claude/
