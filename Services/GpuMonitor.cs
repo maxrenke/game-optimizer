@@ -30,8 +30,18 @@ public static class GpuMonitor
             };
             using var proc = Process.Start(psi);
             if (proc is null) return null;
-            var output = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            string output;
+            try
+            {
+                output = await proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                await proc.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { proc.Kill(); } catch { }
+                return null;
+            }
             var p = output.Split(',').Select(s => s.Trim()).ToArray();
             if (p.Length >= 9 && int.TryParse(p[0], out var temp))
             {
@@ -66,8 +76,18 @@ public static class GpuMonitor
             };
             using var proc = Process.Start(psi);
             if (proc is null) return null;
-            var output = await proc.StandardOutput.ReadToEndAsync();
-            await proc.WaitForExitAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            string output;
+            try
+            {
+                output = await proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                await proc.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { proc.Kill(); } catch { }
+                return null;
+            }
             using var doc = System.Text.Json.JsonDocument.Parse(output);
             var root = doc.RootElement;
             var card = root.EnumerateObject().FirstOrDefault().Value;

@@ -37,6 +37,7 @@ public class OptimizerService : IDisposable
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
+    private int _stopped;       // Interlocked flag - prevents Cleanup running twice
     private int _scanCount;     // increments every 1s
     private DateTime _startTime;
     private int _prevAlertCount;
@@ -98,6 +99,7 @@ public class OptimizerService : IDisposable
 
     public void Stop()
     {
+        if (Interlocked.Exchange(ref _stopped, 1) != 0) return;
         _cts?.Cancel();
         try { _loopTask?.Wait(TimeSpan.FromSeconds(10)); } catch { }
         Cleanup();
@@ -110,6 +112,8 @@ public class OptimizerService : IDisposable
         _pm.RestoreAll();
         _pm.Dispose();
         CpuMonitor.Cleanup();
+        _cts?.Dispose();
+        _cts = null;
     }
 
     public string SaveReport() => _sessions.SaveReport(_startTime);
@@ -142,14 +146,17 @@ public class OptimizerService : IDisposable
 
             // Re-throttle bg every ~60s (60 ticks x 1s)
             if (_scanCount % 60 == 0)
-                await Task.Run(() => _pm.ThrottleBg(), ct);
+            {
+                try { await Task.Run(() => _pm.ThrottleBg(), ct); }
+                catch (OperationCanceledException) { }
+            }
 
             try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { break; }
         }
     }
 
     // Fast path: process scan + network sample + snapshot emit (runs every 1s)
-    private async Task ScanTickAsync()
+    private Task ScanTickAsync()
     {
         var newGames = _pm.Scan();
         foreach (var g in newGames)
@@ -215,7 +222,7 @@ public class OptimizerService : IDisposable
             GpuUtilHistoryIndex: _cgHistIdx);
 
         SnapshotReady?.Invoke(snap);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     // Slow path: WMI CPU + GPU (runs every 3s)
