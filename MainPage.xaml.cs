@@ -56,10 +56,11 @@ public sealed partial class MainPage : Page
         int totalSize = ViewModel.RxHistory.Length;
         int window = Math.Min(ViewModel.HistoryWindowSeconds, totalSize);
 
+        // RX: top 55%, vivid cyan with gradient fill; TX: bottom 40%, muted
         DrawLine(SparklineCanvas, ViewModel.RxHistory, ViewModel.NetHistoryIndex, totalSize, window,
-                 w, h * 0.5, 0, Windows.UI.Color.FromArgb(255, 64, 200, 200));
+                 w, h * 0.54, 0, Windows.UI.Color.FromArgb(255, 0, 200, 232), fill: true);
         DrawLine(SparklineCanvas, ViewModel.TxHistory, ViewModel.NetHistoryIndex, totalSize, window,
-                 w, h * 0.5, h * 0.5, Windows.UI.Color.FromArgb(255, 100, 100, 100));
+                 w, h * 0.40, h * 0.58, Windows.UI.Color.FromArgb(255, 90, 90, 90));
     }
 
     private void DrawCpuSparkline()
@@ -71,7 +72,7 @@ public sealed partial class MainPage : Page
 
         int n = ViewModel.GameCpuHistory.Length;
         DrawLine(CpuSparklineCanvas, ViewModel.GameCpuHistory, ViewModel.GameCpuHistoryIndex, n, n,
-                 w, h, 0, Windows.UI.Color.FromArgb(180, 100, 200, 120));
+                 w, h, 0, Windows.UI.Color.FromArgb(255, 80, 210, 110), fill: true);
     }
 
     private void DrawGpuSparkline()
@@ -83,12 +84,12 @@ public sealed partial class MainPage : Page
 
         int n = ViewModel.GpuUtilHistory.Length;
         DrawLine(GpuSparklineCanvas, ViewModel.GpuUtilHistory, ViewModel.GpuUtilHistoryIndex, n, n,
-                 w, h, 0, Windows.UI.Color.FromArgb(180, 64, 160, 220));
+                 w, h, 0, Windows.UI.Color.FromArgb(255, 64, 160, 240), fill: true);
     }
 
     private static void DrawLine(Canvas canvas, int[] history, int histIdx, int totalSize, int window,
                                   double canvasW, double lineH, double offsetY,
-                                  Windows.UI.Color color)
+                                  Windows.UI.Color color, bool fill = false)
     {
         if (window < 2) return;
 
@@ -97,23 +98,59 @@ public sealed partial class MainPage : Page
             peak = Math.Max(peak, history[(histIdx - window + i + totalSize) % totalSize]);
         if (peak <= 0) peak = 1;
 
-        var points = new PointCollection();
+        // Faint horizontal grid lines at 25 / 50 / 75 %
+        for (int g = 1; g < 4; g++)
+        {
+            double gy = offsetY + lineH * (1.0 - g / 4.0);
+            canvas.Children.Add(new Line
+            {
+                X1 = 0, Y1 = gy, X2 = canvasW, Y2 = gy,
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(18, 255, 255, 255)),
+                StrokeThickness = 1
+            });
+        }
+
+        // Build point list (shared by both fill polygon and stroke line)
+        var pts = new Windows.Foundation.Point[window];
         for (int i = 0; i < window; i++)
         {
             int sampleIdx = (histIdx - window + i + totalSize) % totalSize;
             double x = i * (canvasW / (window - 1));
             double y = offsetY + lineH - (history[sampleIdx] / (double)peak * (lineH - 2)) - 1;
-            points.Add(new Windows.Foundation.Point(x, y));
+            pts[i] = new Windows.Foundation.Point(x, y);
         }
 
-        var poly = new Polyline
+        // Gradient fill polygon under the line
+        if (fill)
         {
-            Points = points,
+            var fillPts = new PointCollection();
+            foreach (var p in pts) fillPts.Add(p);
+            fillPts.Add(new Windows.Foundation.Point(canvasW, offsetY + lineH));
+            fillPts.Add(new Windows.Foundation.Point(0, offsetY + lineH));
+
+            var grad = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint   = new Windows.Foundation.Point(0, 1)
+            };
+            grad.GradientStops.Add(new GradientStop
+                { Color = Windows.UI.Color.FromArgb(55, color.R, color.G, color.B), Offset = 0 });
+            grad.GradientStops.Add(new GradientStop
+                { Color = Windows.UI.Color.FromArgb(0,  color.R, color.G, color.B), Offset = 1 });
+
+            canvas.Children.Add(new Polygon { Points = fillPts, Fill = grad });
+        }
+
+        // Stroke line on top
+        var linePoints = new PointCollection();
+        foreach (var p in pts) linePoints.Add(p);
+        canvas.Children.Add(new Polyline
+        {
+            Points = linePoints,
             Stroke = new SolidColorBrush(color),
             StrokeThickness = 1.5,
             StrokeLineJoin = PenLineJoin.Round
-        };
-        canvas.Children.Add(poly);
+        });
     }
 
     private void HistWindow_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)

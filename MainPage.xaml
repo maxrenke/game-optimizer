@@ -21,10 +21,11 @@
         <StackPanel Spacing="8" Padding="16,8,16,16">
 
             <!-- ── Status bar ─────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12,8">
+            <Border CornerRadius="8" Padding="12,8"
+                    BorderThickness="3,0,0,0"
+                    BorderBrush="{x:Bind ViewModel.IsGaming, Mode=OneWay, Converter={StaticResource BoolToGamingBrushConverter}}">
                 <Border.Background>
-                    <SolidColorBrush Color="{x:Bind ViewModel.IsGaming, Mode=OneWay,
-                        Converter={StaticResource BoolToStatusColorConverter}}" />
+                    <SolidColorBrush Color="#0F1117" Opacity="0.9" />
                 </Border.Background>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -91,9 +92,10 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- CPU Zones -->
-                <Border Grid.Column="0" CornerRadius="8" Padding="12">
+                <Border Grid.Column="0" CornerRadius="8" Padding="12"
+                        BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
-                        <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
                     <StackPanel Spacing="10">
                         <TextBlock Text="CPU ZONES" FontSize="11" Opacity="0.6"
@@ -115,7 +117,7 @@
                                            Foreground="{x:Bind ViewModel.IsGaming, Mode=OneWay,
                                                Converter={StaticResource BoolToGamingBrushConverter}}" />
                                 <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.GameCpuPct, Mode=OneWay}"
-                                             Maximum="100" Height="16" CornerRadius="3"
+                                             Maximum="100" Height="8" CornerRadius="4"
                                              Foreground="{x:Bind ViewModel.GameCpuPct, Mode=OneWay,
                                                  Converter={StaticResource PctToColorConverter}}" />
                                 <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.GameCpuPct, Mode=OneWay,
@@ -137,7 +139,7 @@
                             <TextBlock Text="FF/VLC c6" FontSize="12" VerticalAlignment="Center"
                                        Foreground="#A0C0FF" />
                             <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.FfCpuPct, Mode=OneWay}"
-                                         Maximum="100" Height="16" CornerRadius="3"
+                                         Maximum="100" Height="8" CornerRadius="4"
                                          Foreground="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
                                              Converter={StaticResource PctToColorConverter}}" />
                             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
@@ -158,7 +160,7 @@
                             <TextBlock Text="Bg/OS c7" FontSize="12" VerticalAlignment="Center"
                                        Foreground="#808080" />
                             <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.BgCpuPct, Mode=OneWay}"
-                                         Maximum="100" Height="16" CornerRadius="3"
+                                         Maximum="100" Height="8" CornerRadius="4"
                                          Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
                                              Converter={StaticResource PctToColorConverter}}" />
                             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
@@ -176,9 +178,10 @@
                 </Border>
 
                 <!-- GPU Panel -->
-                <Border Grid.Column="1" CornerRadius="8" Padding="12">
+                <Border Grid.Column="1" CornerRadius="8" Padding="12"
+                        BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
-                        <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
                     <StackPanel Spacing="10">
                         <TextBlock FontSize="11" Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100">
@@ -195,7 +198,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Util" FontSize="12" VerticalAlignment="Center" Opacity="0.7" />
                             <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.GpuUtil, Mode=OneWay}"
-                                         Maximum="100" Height="16" CornerRadius="3"
+                                         Maximum="100" Height="8" CornerRadius="4"
                                          Foreground="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
                                              Converter={StaticResource PctToColorConverter}}" />
                             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
@@ -216,7 +219,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="VRAM" FontSize="12" VerticalAlignment="Center" Opacity="0.7" />
                             <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.VramPct, Mode=OneWay}"
-                                         Maximum="100" Height="16" CornerRadius="3"
+                                         Maximum="100" Height="8" CornerRadius="4"
                                          Foreground="{x:Bind ViewModel.VramPct, Mode=OneWay,
                                              Converter={StaticResource PctToColorConverter}}" />
                             <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.VramText, Mode=OneWay}"
@@ -326,10 +329,11 @@
 
             <!-- Session summary (visible when gaming) -->
             <Border CornerRadius="8" Padding="12"
+                    BorderThickness="1" BorderBrush="#22FFFFFF"
                     Visibility="{x:Bind ViewModel.IsGaming, Mode=OneWay,
                         Converter={StaticResource BoolToVisibilityConverter}}">
                 <Border.Background>
-                    <SolidColorBrush Color="#1A2E1A" Opacity="0.9" />
+                    <SolidColorBrush Color="#0A140A" Opacity="0.95" />
                 </Border.Background>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -361,9 +365,10 @@
             </Border>
 
             <!-- ── Network ─────────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12">
+            <Border CornerRadius="8" Padding="12"
+                    BorderThickness="1" BorderBrush="#18FFFFFF">
                 <Border.Background>
-                    <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                    <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                 </Border.Background>
                 <StackPanel Spacing="6">
                     <Grid>
@@ -379,35 +384,42 @@
                                           Click="HistWindow_Click" FontSize="10" Padding="6,2" />
                         </StackPanel>
                     </Grid>
-                    <Grid>
+                    <!-- Full-width graph (GlassWire hero layout) -->
+                    <Canvas x:Name="SparklineCanvas" Height="88" />
+                    <!-- Stats below the graph -->
+                    <Grid Margin="0,2,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="4">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="RX" FontSize="12" Opacity="0.7" VerticalAlignment="Center" Width="20"/>
-                                <TextBlock FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
-                                           Foreground="#40E0E0">
-                                    <Run Text="{x:Bind ViewModel.RxNow, Mode=OneWay}" /><Run Text=" KB/s" />
-                                </TextBlock>
-                                <TextBlock FontFamily="Consolas" FontSize="11" Opacity="0.6" VerticalAlignment="Center">
-                                    <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay}" />
-                                </TextBlock>
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="DOWNLOAD" FontSize="9" Opacity="0.45"
+                                       CharacterSpacing="80" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="#00C8E8"
+                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay}" />
+                                <TextBlock Text="KB/s" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3"/>
                             </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="TX" FontSize="12" Opacity="0.7" VerticalAlignment="Center" Width="20"/>
-                                <TextBlock FontFamily="Consolas" FontSize="12" VerticalAlignment="Center"
-                                           Foreground="#808080">
-                                    <Run Text="{x:Bind ViewModel.TxNow, Mode=OneWay}" /><Run Text=" KB/s" />
-                                </TextBlock>
-                                <TextBlock FontFamily="Consolas" FontSize="11" Opacity="0.6" VerticalAlignment="Center">
-                                    <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay}" />
-                                </TextBlock>
-                            </StackPanel>
+                            <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
+                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay}" />
+                            </TextBlock>
                         </StackPanel>
-                        <!-- Sparkline canvas - updated from code-behind -->
-                        <Canvas x:Name="SparklineCanvas" Grid.Column="1" Height="40" />
+                        <StackPanel Grid.Column="1" Spacing="1" Margin="16,0,0,0">
+                            <TextBlock Text="UPLOAD" FontSize="9" Opacity="0.45"
+                                       CharacterSpacing="80" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="#606060"
+                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay}" />
+                                <TextBlock Text="KB/s" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                            </StackPanel>
+                            <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
+                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
                     </Grid>
                 </StackPanel>
             </Border>
@@ -419,9 +431,10 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border CornerRadius="8" Padding="12">
+                <Border CornerRadius="8" Padding="12"
+                        BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
-                        <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
                     <StackPanel Spacing="4">
                         <TextBlock Text="BOTTLENECK" FontSize="11" Opacity="0.6"
@@ -432,9 +445,10 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="1" CornerRadius="8" Padding="12">
+                <Border Grid.Column="1" CornerRadius="8" Padding="12"
+                        BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
-                        <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
                     <StackPanel Spacing="4">
                         <TextBlock Text="ALERTS" FontSize="11" Opacity="0.6"
@@ -455,9 +469,10 @@
             </Grid>
 
             <!-- ── Event Log ───────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12">
+            <Border CornerRadius="8" Padding="12"
+                    BorderThickness="1" BorderBrush="#18FFFFFF">
                 <Border.Background>
-                    <SolidColorBrush Color="#1A1A2E" Opacity="0.8" />
+                    <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                 </Border.Background>
                 <StackPanel Spacing="6">
                     <TextBlock Text="EVENT LOG" FontSize="11" Opacity="0.6"
