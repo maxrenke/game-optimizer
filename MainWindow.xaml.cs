@@ -12,20 +12,20 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         Title = "Gaming Optimizer v4";
 
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1000, 860));
-
         AppWindow.Closing += (_, args) =>
         {
             args.Cancel = true;
             HideToTray();
         };
 
-        AppWindow.Changed += (_, _) =>
+        AppWindow.Changed += (_, e) =>
         {
-            if (AppWindow.Size.Width < 800)
-                AppWindow.Resize(new Windows.Graphics.SizeInt32(800, AppWindow.Size.Height));
-            if (AppWindow.Size.Height < 640)
-                AppWindow.Resize(new Windows.Graphics.SizeInt32(AppWindow.Size.Width, 640));
+            if (!e.DidSizeChange) return;
+            var sz = AppWindow.Size;
+            if (sz.Width < 800 || sz.Height < 640)
+                AppWindow.Resize(new Windows.Graphics.SizeInt32(
+                    Math.Max(sz.Width, 800),
+                    Math.Max(sz.Height, 640)));
         };
 
         RootFrame.Navigate(typeof(MainPage));

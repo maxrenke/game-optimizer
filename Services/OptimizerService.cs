@@ -125,7 +125,9 @@ public class OptimizerService : IDisposable
 
     private async Task LoopAsync(CancellationToken ct)
     {
-        // Kick off first WMI sample immediately so dashboard isn't blank
+        // Emit snapshot immediately so UI shows something while heavy sample loads
+        try { await ScanTickAsync(); } catch { }
+
         (_lastCoreData, _lastGpu) = await SampleHeavyAsync();
 
         while (!ct.IsCancellationRequested)
