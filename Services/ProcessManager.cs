@@ -98,12 +98,15 @@ public class ProcessManager : IDisposable
             if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) ||
                 name.Equals("vlc", StringComparison.OrdinalIgnoreCase))
             {
-                var proc = SafeGetProcess(pid);
-                if (proc is not null && !_appliedMediaZone.ContainsKey(pid))
+                if (PinningEnabled)
                 {
-                    ApplyMediaZone(proc);
-                    _appliedMediaZone[pid] = name;
-                    LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
+                    var proc = SafeGetProcess(pid);
+                    if (proc is not null && !_appliedMediaZone.ContainsKey(pid))
+                    {
+                        ApplyMediaZone(proc);
+                        _appliedMediaZone[pid] = name;
+                        LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
+                    }
                 }
                 return;
             }
@@ -111,17 +114,20 @@ public class ProcessManager : IDisposable
             // Check bg procs immediately
             if (AllBgProcs.Any(b => b.Equals(name, StringComparison.OrdinalIgnoreCase)))
             {
-                var proc = SafeGetProcess(pid);
-                if (proc is not null)
+                if (PinningEnabled)
                 {
-                    try
+                    var proc = SafeGetProcess(pid);
+                    if (proc is not null)
                     {
-                        proc.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
-                        _modifiedPids[pid] = 0;
-                        _appliedBgProcs[pid] = name;
+                        try
+                        {
+                            proc.PriorityClass = ProcessPriorityClass.BelowNormal;
+                            proc.ProcessorAffinity = BgAffinity;
+                            _modifiedPids[pid] = 0;
+                            _appliedBgProcs[pid] = name;
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
                 return;
             }
@@ -189,14 +195,17 @@ public class ProcessManager : IDisposable
         }
 
         // Pin new firefox + vlc (fallback for when WMI start event is missed)
-        foreach (var proc in SafeGetProcessesByName("firefox")
-            .Concat(SafeGetProcessesByName("vlc")))
+        if (PinningEnabled)
         {
-            if (!_appliedMediaZone.ContainsKey(proc.Id))
+            foreach (var proc in SafeGetProcessesByName("firefox")
+                .Concat(SafeGetProcessesByName("vlc")))
             {
-                ApplyMediaZone(proc);
-                _appliedMediaZone[proc.Id] = proc.ProcessName;
-                LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
+                if (!_appliedMediaZone.ContainsKey(proc.Id))
+                {
+                    ApplyMediaZone(proc);
+                    _appliedMediaZone[proc.Id] = proc.ProcessName;
+                    LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
+                }
             }
         }
 
@@ -212,6 +221,8 @@ public class ProcessManager : IDisposable
 
     public void ThrottleBg()
     {
+        if (!PinningEnabled) return;
+
         // Parallel across process name lookups to avoid serial GetProcessesByName calls
         Parallel.ForEach(AllBgProcs, name =>
         {
@@ -220,7 +231,7 @@ public class ProcessManager : IDisposable
                 try
                 {
                     proc.PriorityClass = ProcessPriorityClass.BelowNormal;
-                    if (PinningEnabled) proc.ProcessorAffinity = BgAffinity;
+                    proc.ProcessorAffinity = BgAffinity;
                     _modifiedPids[proc.Id] = 0;
                     _appliedBgProcs[proc.Id] = proc.ProcessName;
                 }
@@ -300,8 +311,11 @@ public class ProcessManager : IDisposable
     {
         try
         {
-            proc.PriorityClass = ProcessPriorityClass.High;
-            if (PinningEnabled) proc.ProcessorAffinity = GameAffinity;
+            if (PinningEnabled)
+            {
+                proc.PriorityClass = ProcessPriorityClass.High;
+                proc.ProcessorAffinity = GameAffinity;
+            }
             return true;
         }
         catch { return false; }
@@ -311,8 +325,9 @@ public class ProcessManager : IDisposable
     {
         try
         {
+            // Only called when PinningEnabled is true
             proc.PriorityClass = ProcessPriorityClass.Normal;
-            if (PinningEnabled) proc.ProcessorAffinity = FirefoxAffinity;
+            proc.ProcessorAffinity = FirefoxAffinity;
             _modifiedPids[proc.Id] = 0;
         }
         catch { }
