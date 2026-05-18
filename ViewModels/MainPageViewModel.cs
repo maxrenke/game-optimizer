@@ -81,10 +81,15 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial int ReportCount { get; set; }
     [ObservableProperty] public partial string ReportDir { get; set; } = SessionTracker.ReportDir;
 
+    // ── Startup state ──────────────────────────────────────────
+    /// <summary>False until the first snapshot arrives; hides the startup banner.</summary>
+    [ObservableProperty] public partial bool HasData { get; set; } = false;
+
     public void ApplySnapshot(OptimizerSnapshot s)
     {
         _dispatcher.TryEnqueue(() =>
         {
+            HasData = true;
             IsGaming = s.IsGaming;
             GameName = s.GameName;
             UptimeText = $"{(int)s.Uptime.TotalHours:D2}h {s.Uptime.Minutes:D2}m {s.Uptime.Seconds:D2}s";

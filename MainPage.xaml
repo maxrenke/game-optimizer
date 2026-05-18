@@ -540,5 +540,41 @@
         </Button>
     </Grid>
 
+
+    <!-- ── Startup banner (visible until first snapshot arrives) ── -->
+    <Border Grid.Row="0" Grid.RowSpan="2"
+            Visibility="{x:Bind ViewModel.HasData, Mode=OneWay,
+                         Converter={StaticResource InvertBoolToVisibilityConverter}}"
+            VerticalAlignment="Center" HorizontalAlignment="Center"
+            CornerRadius="10" Padding="32,24" BorderThickness="1"
+            BorderBrush="#28FFFFFF" MaxWidth="400">
+        <Border.Background>
+            <SolidColorBrush Color="#0D1017" Opacity="0.97" />
+        </Border.Background>
+        <StackPanel Spacing="14" HorizontalAlignment="Center">
+            <ProgressRing IsActive="True" Width="36" Height="36"
+                          HorizontalAlignment="Center"
+                          Foreground="#3CC8F0" />
+            <StackPanel Spacing="4">
+                <TextBlock Text="Collecting first sample..."
+                           FontSize="15" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" />
+                <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap"
+                           TextAlignment="Center">
+                    Reading CPU cores and GPU data for the first time.
+                    This takes 3-5 seconds on startup.
+                </TextBlock>
+            </StackPanel>
+            <StackPanel Spacing="3" Opacity="0.5">
+                <TextBlock FontSize="11" HorizontalAlignment="Center">
+                    No process changes have been made yet.
+                </TextBlock>
+                <TextBlock FontSize="11" HorizontalAlignment="Center">
+                    CPU affinity pinning is OFF by default.
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
     </Grid>
 </Page>

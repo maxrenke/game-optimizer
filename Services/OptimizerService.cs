@@ -93,7 +93,7 @@ public class OptimizerService : IDisposable
         _pm.Scan();
         _pm.ThrottleBg();
         _pm.StartWmiWatcher();
-        AddLog("[INIT] v4 started - optimizations applied");
+        AddLog("[INIT] v4 ready - monitoring active, pinning off");
         _loopTask = Task.Run(() => LoopAsync(_cts.Token));
     }
 
