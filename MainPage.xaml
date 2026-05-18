@@ -18,10 +18,10 @@
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
-        <StackPanel Spacing="8" Padding="16,8,16,16">
+        <StackPanel Spacing="5" Padding="10,6,10,10">
 
             <!-- ── Status bar ─────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12,8"
+            <Border CornerRadius="6" Padding="10,6"
                     BorderThickness="3,0,0,0"
                     BorderBrush="{x:Bind ViewModel.IsGaming, Mode=OneWay, Converter={StaticResource BoolToGamingBrushConverter}}">
                 <Border.Background>
@@ -51,7 +51,7 @@
             </Border>
 
             <!-- ── CPU Pinning state banner ───────────────────────── -->
-            <Border CornerRadius="8" Padding="14,10" BorderThickness="1.5"
+            <Border CornerRadius="6" Padding="10,8" BorderThickness="1.5"
                     Background="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBgConverter}}"
                     BorderBrush="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBorderConverter}}">
                 <Grid>
@@ -85,19 +85,19 @@
             </Border>
 
             <!-- ── CPU | GPU panels ────────────────────────────────── -->
-            <Grid ColumnSpacing="8">
+            <Grid ColumnSpacing="5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- CPU Zones -->
-                <Border Grid.Column="0" CornerRadius="8" Padding="12"
+                <Border Grid.Column="0" CornerRadius="6" Padding="10,8"
                         BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
                         <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
-                    <StackPanel Spacing="10">
+                    <StackPanel Spacing="7">
                         <TextBlock Text="CPU ZONES" FontSize="11" Opacity="0.6"
                                    FontWeight="SemiBold" CharacterSpacing="100" />
 
@@ -178,12 +178,12 @@
                 </Border>
 
                 <!-- GPU Panel -->
-                <Border Grid.Column="1" CornerRadius="8" Padding="12"
+                <Border Grid.Column="1" CornerRadius="6" Padding="10,8"
                         BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
                         <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
-                    <StackPanel Spacing="10">
+                    <StackPanel Spacing="7">
                         <TextBlock FontSize="11" Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100">
                             <Run Text="GPU  " /><Run Text="{x:Bind ViewModel.GpuVendor, Mode=OneWay}" />
                         </TextBlock>
@@ -328,7 +328,7 @@
             </Expander>
 
             <!-- Session summary (visible when gaming) -->
-            <Border CornerRadius="8" Padding="12"
+            <Border CornerRadius="6" Padding="10,7"
                     BorderThickness="1" BorderBrush="#22FFFFFF"
                     Visibility="{x:Bind ViewModel.IsGaming, Mode=OneWay,
                         Converter={StaticResource BoolToVisibilityConverter}}">
@@ -365,12 +365,12 @@
             </Border>
 
             <!-- ── Network ─────────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12"
+            <Border CornerRadius="6" Padding="10,8"
                     BorderThickness="1" BorderBrush="#18FFFFFF">
                 <Border.Background>
                     <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                 </Border.Background>
-                <StackPanel Spacing="6">
+                <StackPanel Spacing="5">
                     <Grid>
                         <TextBlock x:Name="NetHistoryLabel" Text="NETWORK  (30s history)" FontSize="11"
                                    Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100"
@@ -385,9 +385,9 @@
                         </StackPanel>
                     </Grid>
                     <!-- Full-width graph (GlassWire hero layout) -->
-                    <Canvas x:Name="SparklineCanvas" Height="88" />
+                    <Canvas x:Name="SparklineCanvas" Height="72" />
                     <!-- Stats below the graph -->
-                    <Grid Margin="0,2,0,0">
+                    <Grid Margin="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
@@ -425,18 +425,18 @@
             </Border>
 
             <!-- ── Bottleneck + Alert ──────────────────────────────── -->
-            <Grid ColumnSpacing="8">
+            <Grid ColumnSpacing="5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border CornerRadius="8" Padding="12"
+                <Border CornerRadius="6" Padding="10,7"
                         BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
                         <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
-                    <StackPanel Spacing="4">
+                    <StackPanel Spacing="3">
                         <TextBlock Text="BOTTLENECK" FontSize="11" Opacity="0.6"
                                    FontWeight="SemiBold" CharacterSpacing="100" />
                         <TextBlock Text="{x:Bind ViewModel.BottleneckLabel, Mode=OneWay}"
@@ -445,12 +445,12 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="1" CornerRadius="8" Padding="12"
+                <Border Grid.Column="1" CornerRadius="6" Padding="10,7"
                         BorderThickness="1" BorderBrush="#18FFFFFF">
                     <Border.Background>
                         <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                     </Border.Background>
-                    <StackPanel Spacing="4">
+                    <StackPanel Spacing="3">
                         <TextBlock Text="ALERTS" FontSize="11" Opacity="0.6"
                                    FontWeight="SemiBold" CharacterSpacing="100" />
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -469,18 +469,18 @@
             </Grid>
 
             <!-- ── Event Log ───────────────────────────────────────── -->
-            <Border CornerRadius="8" Padding="12"
+            <Border CornerRadius="6" Padding="10,8"
                     BorderThickness="1" BorderBrush="#18FFFFFF">
                 <Border.Background>
                     <SolidColorBrush Color="#0F1117" Opacity="0.85" />
                 </Border.Background>
-                <StackPanel Spacing="6">
+                <StackPanel Spacing="4">
                     <TextBlock Text="EVENT LOG" FontSize="11" Opacity="0.6"
                                FontWeight="SemiBold" CharacterSpacing="100" />
                     <ListView x:Name="LogListView"
                               ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
                               ItemTemplate="{StaticResource LogLineTemplate}"
-                              MaxHeight="320"
+                              MaxHeight="200"
                               SelectionMode="None"
                               IsItemClickEnabled="False"
                               ScrollViewer.VerticalScrollBarVisibility="Auto"
