@@ -20,4 +20,24 @@ public sealed partial class SettingsPage : Page
         ViewModel.SaveCommand.Execute(null);
         App.Window.ShowMain();
     }
+
+    private async void ResetAllBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Reset all process state?",
+            Content = "This will immediately restore all process affinities and priorities to " +
+                      "Windows defaults and clear all pinning state.\n\n" +
+                      "CPU pinning will be turned off. The optimizer will continue running.",
+            PrimaryButtonText = "Reset",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        if (App.OptimizerService is null) return;
+        App.OptimizerService.ResetAll();
+    }
 }

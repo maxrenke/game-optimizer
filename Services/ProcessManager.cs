@@ -285,6 +285,15 @@ public class ProcessManager : IDisposable
         LogEntry?.Invoke("[PIN] CPU pinning ENABLED - affinities restored");
     }
 
+    public void ClearState()
+    {
+        ActiveGames.Clear();
+        _appliedMediaZone.Clear();
+        _appliedBgProcs.Clear();
+        _modifiedPids.Clear();
+        _pathFailCache.Clear();
+    }
+
     public void RestoreAll()
     {
         var pidsToReset = _modifiedPids.Keys.ToList();

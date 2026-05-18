@@ -126,6 +126,11 @@ public class OptimizerServiceWrapper(Services.OptimizerService inner)
         Task.Run(() => inner.PinningEnabled = !inner.PinningEnabled);
     }
 
+    public void ResetAll()
+    {
+        Task.Run(() => inner.ResetAll());
+    }
+
     public void Stop()
     {
         _ = inner.SaveReport();

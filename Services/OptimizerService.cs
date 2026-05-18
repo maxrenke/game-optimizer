@@ -116,6 +116,24 @@ public class OptimizerService : IDisposable
         _cts = null;
     }
 
+    public void ResetAll()
+    {
+        // Restore all process affinities and priorities to system defaults
+        _pm.PinningEnabled = false;
+        _pm.RestoreAll();
+        _pm.ClearState();
+
+        // Restore system settings (timer resolution, Win32PrioritySeparation, SysMain)
+        _sys.DisableGamingOptimizations();
+
+        // Re-apply timer and quantum settings - these are always-on optimizations
+        _sys.EnableGamingOptimizations();
+
+        if (_sessions.Current is not null) _sessions.EndSession();
+
+        AddLog("[RESET] All process affinities and priorities restored to system defaults");
+    }
+
     public string SaveReport() => _sessions.SaveReport(_startTime);
 
     public int ReportCount()

@@ -163,6 +163,30 @@
             <TextBlock Text="Settings take effect on next restart of the optimizer service."
                        FontSize="11" Opacity="0.5" />
 
+            <!-- Danger zone -->
+            <Border CornerRadius="6" Padding="14,10" BorderThickness="1"
+                    BorderBrush="#44FF4444">
+                <Border.Background>
+                    <SolidColorBrush Color="#220A0A" />
+                </Border.Background>
+                <StackPanel Spacing="6">
+                    <TextBlock Text="DANGER ZONE" FontSize="10" FontWeight="SemiBold"
+                               CharacterSpacing="100" Foreground="#FF6666" Opacity="0.8" />
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap">
+                        Immediately restores all process affinities and priorities to Windows defaults,
+                        re-enables SysMain, and clears all pinning state. Use if the app has left
+                        processes in a bad state.
+                    </TextBlock>
+                    <Button x:Name="ResetAllBtn" Click="ResetAllBtn_Click" Margin="0,4,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE777;" FontSize="14" Foreground="#FF6666" />
+                            <TextBlock Text="Reset All Process State" FontSize="12"
+                                       Foreground="#FF6666" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </Page>
