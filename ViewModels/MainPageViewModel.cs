@@ -197,7 +197,7 @@ public class LogLine
         {
             _ when text.Contains("[GAME]")  => new SolidColorBrush(Color.FromArgb(255, 200, 100, 220)),
             _ when text.Contains("[ENDED]") => new SolidColorBrush(Color.FromArgb(255, 200, 180, 60)),
-            _ when text.Contains("[FF]")    => new SolidColorBrush(Color.FromArgb(255, 80, 200, 220)),
+            _ when text.Contains("[MEDIA]") => new SolidColorBrush(Color.FromArgb(255, 80, 200, 220)),
             _ when text.Contains("[SYS]")   => new SolidColorBrush(Color.FromArgb(255, 200, 180, 60)),
             _ when text.Contains("[PIN]")   => new SolidColorBrush(Color.FromArgb(255, 80, 200, 100)),
             _ when text.Contains("[BG]")    => new SolidColorBrush(Color.FromArgb(255, 100, 100, 100)),

@@ -34,7 +34,7 @@ public class SystemService
                 LogEntry?.Invoke($"[SYS] PrioritySeparation: {_originalPrio} -> 26 (fixed quanta)");
             }
         }
-        catch { LogEntry?.Invoke("[SYS] PrioritySep change failed (needs admin)"); }
+        catch { LogEntry?.Invoke("[SYS] PrioritySeparation change failed (needs admin)"); }
 
         timeBeginPeriod(1);
         LogEntry?.Invoke("[SYS] Timer resolution set to 1ms");
@@ -48,11 +48,11 @@ public class SystemService
                 _sysMainOriginalStart = svc.StartType;
                 _sysMainStopped = true;
                 Task.Run(() => { try { svc.Stop(); } catch { } });
-                LogEntry?.Invoke($"[SYS] SysMain suspended (was {_sysMainOriginalStart}, NVMe - no benefit)");
+                LogEntry?.Invoke($"[SYS] SysMain suspended (was {_sysMainOriginalStart})");
             }
             else if (svc.StartType == ServiceStartMode.Disabled)
             {
-                LogEntry?.Invoke("[SYS] SysMain already disabled - skipping");
+                LogEntry?.Invoke("[SYS] SysMain already disabled");
             }
         }
         catch { }
@@ -96,7 +96,7 @@ public class SystemService
             if (key?.GetValue(PrioValue) is int cur && cur == GamingPrio)
             {
                 key.SetValue(PrioValue, 2, RegistryValueKind.DWord);
-                log("[INIT] Stale PrioritySep=26 detected (prev crash?) - reset to 2");
+                log("[INIT] Stale PrioritySeparation=26 detected (prev crash?) - reset to 2");
             }
         }
         catch { }

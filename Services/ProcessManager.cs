@@ -105,7 +105,7 @@ public class ProcessManager : IDisposable
                     {
                         ApplyMediaZone(proc);
                         _appliedMediaZone[pid] = name;
-                        LogEntry?.Invoke($"[FF] Pinned {name} PID {pid} to Firefox zone (instant)");
+                        LogEntry?.Invoke($"[MEDIA] Pinned {name} (PID {pid}) to media zone");
                     }
                 }
                 return;
@@ -144,7 +144,7 @@ public class ProcessManager : IDisposable
             var pid = Convert.ToInt32(e.NewEvent["ProcessID"]);
             if (ActiveGames.TryRemove(pid, out var name))
             {
-                LogEntry?.Invoke($"[ENDED] {name} closed (PID {pid}) (instant)");
+                LogEntry?.Invoke($"[ENDED] {name} closed (PID {pid})");
             }
             _appliedMediaZone.TryRemove(pid, out _);
             _appliedBgProcs.TryRemove(pid, out _);
@@ -168,7 +168,7 @@ public class ProcessManager : IDisposable
                     ActiveGames[proc.Id] = proc.ProcessName;
                     _modifiedPids[proc.Id] = 0;
                     newGames.Add(proc.ProcessName);
-                    LogEntry?.Invoke($"[GAME] DETECTED: {proc.ProcessName} (PID {proc.Id})");
+                    LogEntry?.Invoke($"[GAME] Detected: {proc.ProcessName} (PID {proc.Id})");
                 }
             }
         }
@@ -204,7 +204,7 @@ public class ProcessManager : IDisposable
                 {
                     ApplyMediaZone(proc);
                     _appliedMediaZone[proc.Id] = proc.ProcessName;
-                    LogEntry?.Invoke($"[FF] Pinned {proc.ProcessName} PID {proc.Id} to Firefox zone");
+                    LogEntry?.Invoke($"[MEDIA] Pinned {proc.ProcessName} (PID {proc.Id}) to media zone");
                 }
             }
         }
