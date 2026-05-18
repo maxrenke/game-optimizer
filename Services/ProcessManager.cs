@@ -219,6 +219,11 @@ public class ProcessManager : IDisposable
         return newGames;
     }
 
+    /// <summary>
+    /// Pins all known background process names to the BG affinity zone at BelowNormal priority.
+    /// No-op when <see cref="PinningEnabled"/> is false - guaranteed to make zero process changes.
+    /// Re-run periodically (~60s) to catch processes that started after the last scan.
+    /// </summary>
     public void ThrottleBg()
     {
         if (!PinningEnabled) return;
@@ -285,6 +290,11 @@ public class ProcessManager : IDisposable
         LogEntry?.Invoke("[PIN] CPU pinning ENABLED - affinities restored");
     }
 
+    /// <summary>
+    /// Wipes all internal tracking state without touching any live processes.
+    /// Call this after <see cref="RestoreAll"/> to fully reset to a clean slate.
+    /// Safe to call at any time; subsequent <see cref="Scan"/> calls work normally.
+    /// </summary>
     public void ClearState()
     {
         ActiveGames.Clear();
@@ -294,6 +304,11 @@ public class ProcessManager : IDisposable
         _pathFailCache.Clear();
     }
 
+    /// <summary>
+    /// Restores every process in <c>_modifiedPids</c> to all-cores affinity and Normal priority.
+    /// Only touches PIDs that this instance actually modified - no full process scan.
+    /// Does NOT clear internal tracking state; call <see cref="ClearState"/> afterward if needed.
+    /// </summary>
     public void RestoreAll()
     {
         var pidsToReset = _modifiedPids.Keys.ToList();

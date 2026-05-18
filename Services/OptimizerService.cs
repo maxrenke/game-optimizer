@@ -116,6 +116,17 @@ public class OptimizerService : IDisposable
         _cts = null;
     }
 
+    /// <summary>
+    /// Emergency recovery: immediately restores every modified process to Windows defaults and
+    /// returns the optimizer to a clean monitoring-only state. The service keeps running.
+    /// <list type="bullet">
+    /// <item>Sets <see cref="PinningEnabled"/> to false (no further process changes)</item>
+    /// <item>Walks every modified PID and resets affinity to all-cores, priority to Normal</item>
+    /// <item>Clears all internal process-tracking state</item>
+    /// <item>Restores Win32PrioritySeparation, re-enables SysMain, calls timeEndPeriod(1)</item>
+    /// <item>Ends any active game session (stats for the partial session are discarded)</item>
+    /// </list>
+    /// </summary>
     public void ResetAll()
     {
         // Restore all process affinities and priorities to system defaults

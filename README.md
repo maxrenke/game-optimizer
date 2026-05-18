@@ -7,6 +7,8 @@
 
 A native WinUI 3 desktop app that squeezes every frame out of your PC by managing CPU affinity, process priorities, and system timers in real time - automatically, the moment a game launches.
 
+> **CPU affinity pinning is opt-in.** The app monitors and reports by default with zero process modifications. Pinning must be explicitly enabled via the toggle in the dashboard or system tray. When pinning is off, no process affinity, priority, or system setting is touched.
+
 ---
 
 ## What it does
@@ -56,6 +58,7 @@ When the game closes, all processes are restored to their original affinities an
 - Configurable affinity masks (hex), alert thresholds, game paths, extra throttled processes
 - Start minimized / Start with Windows (creates a scheduled task at HIGHEST privilege)
 - Auto-detects NIC if the configured one is missing
+- **Reset All Process State** (Danger Zone) - immediately restores every process affinity and priority to Windows defaults, re-enables SysMain, and clears all internal pinning state. Useful if the app left processes in a bad state after a crash.
 
 ---
 
@@ -64,8 +67,8 @@ When the game closes, all processes are restored to their original affinities an
 ```
 GameOptimizer/
 - Services/
-  - OptimizerService.cs      # Orchestrator: 1s scan tick + 3s heavy tick
-  - ProcessManager.cs        # Affinity/priority + WMI event watchers
+  - OptimizerService.cs      # Orchestrator: 1s scan tick + 3s heavy tick + ResetAll
+  - ProcessManager.cs        # Affinity/priority + WMI event watchers; all ops gated on PinningEnabled
   - CpuMonitor.cs            # PDH API per-core sampling (~5ms, persistent query)
   - GpuMonitor.cs            # nvidia-smi -> rocm-smi -> WDDM WMI fallback
   - NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer (300 samples / 5 min)
@@ -91,16 +94,21 @@ GameOptimizer/
   - GameLibraryScannerTests.cs
   - NetworkMonitorTests.cs
   - OptimizerConfigTests.cs
-  - ProcessManagerTests.cs
+  - OptimizerServiceTests.cs  # construction, ResetAll, Stop/Dispose safety
+  - ProcessManagerTests.cs    # pinning-off no-op guarantees, ClearState, state transitions
   - SessionTrackerTests.cs
 - .github/workflows/ci.yml  # xUnit on windows-latest, .NET 10
 ```
 
-**Loop design:** `OptimizerService` runs two interleaved tasks. The fast path (every 1s) does process scanning, network sampling, bottleneck update, and snapshot emission. The slow path (every 3s) calls the PDH CPU query and GPU monitor - both are I/O-bound and would stall the fast path if run every second. GPU subprocess calls (`nvidia-smi`, `rocm-smi`) have a 3-second timeout with `proc.Kill()` on expiry so a hung driver never blocks the loop.
+**Pinning safety invariant:** `PinningEnabled = false` (the default) is a hard guarantee that zero process modifications occur. Every call site in `ProcessManager` that would write to `ProcessorAffinity` or `PriorityClass` is wrapped in `if (PinningEnabled)`. `ThrottleBg()` short-circuits at the top. WMI event callbacks for Firefox/VLC and background processes do nothing when pinning is off. This is verified by tests that subscribe to `LogEntry` and assert no log entries are emitted (since every actual modification produces a log entry).
+
+**Loop design:** `OptimizerService` runs two interleaved tasks. The fast path (every 1s) does process scanning, network sampling, bottleneck update, and snapshot emission. An initial snapshot is emitted immediately before the first heavy sample so the UI renders instantly with live data. The slow path (every 3s) calls the PDH CPU query and GPU monitor - both are I/O-bound and would stall the fast path if run every second. GPU subprocess calls (`nvidia-smi`, `rocm-smi`) have a 3-second timeout with `proc.Kill()` on expiry so a hung driver never blocks the loop.
 
 **Thread safety:** All cross-thread process state uses `ConcurrentDictionary`. The event log uses `ConcurrentQueue` - WMI event callbacks (start/stop trace) enqueue log entries from WMI thread pool threads concurrently with the main loop reading them. No locks needed in the hot path.
 
 **Clean exit:** On stop, the service cancels the loop token, waits up to 10s for the loop task, then runs cleanup: restores all process affinities and priorities (including game processes raised to High), calls `timeEndPeriod(1)`, restores Win32PrioritySeparation, restarts SysMain if it was stopped, closes the PDH query handle, and disposes WMI watchers. An `Interlocked` flag prevents double-cleanup when `Stop()` is called before `Dispose()`.
+
+**ResetAll:** An emergency recovery path that immediately: sets `PinningEnabled = false`, calls `RestoreAll()` to walk every modified PID and revert its affinity/priority to system defaults, calls `ClearState()` to wipe all internal tracking dictionaries, calls `DisableGamingOptimizations()` to restore Win32PrioritySeparation, re-enable SysMain, and call `timeEndPeriod(1)`, and ends any open session. The optimizer keeps running after a reset - it just returns to a clean monitoring-only state.
 
 **PDH vs WMI:** WMI `Win32_PerfFormattedData_PerfOS_Processor` takes 300-500ms per query (COM overhead + kernel round-trip). The PDH API with a persistent open query takes ~5ms - a 60-100x improvement that unlocks true 1s cadence for everything else.
 
@@ -120,7 +128,7 @@ GameOptimizer/
 | Timer resolution | winmm.dll timeBeginPeriod |
 | Affinity | kernel32.dll SetProcessAffinityMask |
 | Tray icon | user32.dll LoadImage (real Win32 HICON) |
-| Tests | xUnit 2.9 / 82 tests |
+| Tests | xUnit 2.9 / 106 tests |
 | CI | GitHub Actions (windows-latest) |
 
 ---
