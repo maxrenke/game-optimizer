@@ -123,15 +123,13 @@ public class OptimizerService : IDisposable
         _pm.RestoreAll();
         _pm.ClearState();
 
-        // Restore system settings (timer resolution, Win32PrioritySeparation, SysMain)
+        // Restore system settings: timer resolution, Win32PrioritySeparation, SysMain
         _sys.DisableGamingOptimizations();
 
-        // Re-apply timer and quantum settings - these are always-on optimizations
-        _sys.EnableGamingOptimizations();
-
+        // Close any open session (no meaningful stats after a mid-session reset)
         if (_sessions.Current is not null) _sessions.EndSession();
 
-        AddLog("[RESET] All process affinities and priorities restored to system defaults");
+        AddLog("[RESET] All process affinities, priorities, and system settings restored to defaults");
     }
 
     public string SaveReport() => _sessions.SaveReport(_startTime);
