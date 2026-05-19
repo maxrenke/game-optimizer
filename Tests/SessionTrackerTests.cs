@@ -129,12 +129,23 @@ public class SessionTrackerTests
     }
 
     [Fact]
-    public void SaveReport_NoGames_ContainsNoGamesMessage()
+    public void SaveReport_NoGames_ShortUptime_DoesNotWriteFile()
     {
+        // Under 2 minutes with no games detected - not worth recording
         var t = new SessionTracker();
-        var file = t.SaveReport(DateTime.Now.AddMinutes(-1));
+        var result = t.SaveReport(DateTime.Now.AddMinutes(-1));
+        Assert.True(string.IsNullOrEmpty(result));
+    }
+
+    [Fact]
+    public void SaveReport_NoGames_LongUptime_WritesNoGamesMessage()
+    {
+        // Over 2 minutes with no games - worth recording (user may want to know)
+        var t = new SessionTracker();
+        var file = t.SaveReport(DateTime.Now.AddMinutes(-10));
         try
         {
+            Assert.False(string.IsNullOrEmpty(file));
             Assert.True(File.Exists(file));
             var text = File.ReadAllText(file);
             Assert.Contains("No games detected", text);

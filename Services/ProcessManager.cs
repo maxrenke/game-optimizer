@@ -19,7 +19,8 @@ public class ProcessManager : IDisposable
         "unrealcefsubprocess","easyanticheat","easyanticheat_setup",
         "bsoverlay","nvcapcli","nvidiaoverlaycontainer",
         "gamebarftstserver","gamebarpresencewriter",
-        "stardocklauncher","unins000"
+        "stardocklauncher","unins000",
+        "quicksfv","sfv","md5","hashcheck"
     };
 
     private static readonly string[] BuiltInBgProcs =

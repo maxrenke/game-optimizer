@@ -75,6 +75,10 @@ public class SessionTracker
 
     public string SaveReport(DateTime sessionStart)
     {
+        // Don't write a file if nothing happened worth recording
+        if (_sessions.Count == 0 && (DateTime.Now - sessionStart).TotalMinutes < 2)
+            return string.Empty;
+
         Directory.CreateDirectory(ReportDir);
 
         // Prune reports older than 30 days
@@ -116,13 +120,14 @@ public class SessionTracker
                     var pCpu = (int)Math.Round(g.BtCpuTicks * 100.0 / btTotal);
                     var pBal = (int)Math.Round(g.BtBalTicks * 100.0 / btTotal);
                     var pHr  = (int)Math.Round(g.BtHrTicks  * 100.0 / btTotal);
-                    var dom = (pGpu, pCpu, pBal, pHr) switch
-                    {
-                        _ when pGpu >= pCpu && pGpu >= pBal => "GPU-bound",
-                        _ when pCpu >= pBal                 => "CPU-bound",
-                        _ when pBal >= pHr                  => "Balanced",
-                        _                                   => "Headroom"
-                    };
+                    // Find the actual dominant state by raw tick count (not rounded %)
+                    // to avoid ties when all round to 0 in short sessions.
+                    var dom = new[] {
+                        (g.BtGpuTicks, "GPU-bound"),
+                        (g.BtCpuTicks, "CPU-bound"),
+                        (g.BtBalTicks, "Balanced"),
+                        (g.BtHrTicks,  "Headroom")
+                    }.MaxBy(x => x.Item1).Item2;
                     lines.Add($"  Bottleneck: {dom} most of session");
                     lines.Add($"    GPU {pGpu,4}%  CPU {pCpu,4}%  Balanced {pBal,4}%  Headroom {pHr,4}%");
                 }
