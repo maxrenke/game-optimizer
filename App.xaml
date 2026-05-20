@@ -30,6 +30,9 @@
             <conv:PinToOnOffConverter x:Key="PinToOnOffConverter" />
             <conv:ReportCountConverter x:Key="ReportCountConverter" />
             <conv:DoubleToF0Converter x:Key="DoubleToF0Converter" />
+            <conv:RateValueConverter x:Key="RateValueConverter" />
+            <conv:RateUnitConverter x:Key="RateUnitConverter" />
+            <conv:RateConverter x:Key="RateConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

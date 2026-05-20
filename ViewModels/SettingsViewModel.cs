@@ -17,6 +17,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [ObservableProperty] public partial string NicName { get; set; } = "Ethernet 2";
+    [ObservableProperty] public partial string PingHost { get; set; } = "1.1.1.1";
     [ObservableProperty] public partial string GameAffinityHex { get; set; } = "0xFFF";
     [ObservableProperty] public partial string FirefoxAffinityHex { get; set; } = "0x3000";
     [ObservableProperty] public partial string BgAffinityHex { get; set; } = "0xC000";
@@ -119,6 +120,7 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             _cfg.NicName = NicName;
+            _cfg.PingHost = PingHost;
             _cfg.GameAffinityMask = Convert.ToInt64(GameAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
             _cfg.FirefoxAffinityMask = Convert.ToInt64(FirefoxAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
             _cfg.BgAffinityMask = Convert.ToInt64(BgAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
@@ -167,6 +169,7 @@ public partial class SettingsViewModel : ObservableObject
     private void LoadFromConfig()
     {
         NicName = _cfg.NicName;
+        PingHost = _cfg.PingHost;
         GameAffinityHex = $"0x{_cfg.GameAffinityMask:X}";
         FirefoxAffinityHex = $"0x{_cfg.FirefoxAffinityMask:X}";
         BgAffinityHex = $"0x{_cfg.BgAffinityMask:X}";

@@ -6,6 +6,9 @@ namespace GameOptimizer.Services;
 public class OptimizerConfig
 {
     public string NicName { get; set; } = "Ethernet 2";
+
+    /// <summary>Host pinged to measure latency and jitter.</summary>
+    public string PingHost { get; set; } = "1.1.1.1";
     public long GameAffinityMask { get; set; } = 0x0FFF;
     public long FirefoxAffinityMask { get; set; } = 0x3000;
     public long BgAffinityMask { get; set; } = 0xC000;
@@ -97,6 +100,9 @@ public class OptimizerConfig
         AlertGpuUtilPct     = Math.Clamp(AlertGpuUtilPct, 50, 100);
         AlertCpuZonePct     = Math.Clamp(AlertCpuZonePct, 50, 100);
         AlertSustainedTicks = Math.Clamp(AlertSustainedTicks, 1, 20);
+
+        if (string.IsNullOrWhiteSpace(PingHost)) PingHost = "1.1.1.1";
+        else PingHost = PingHost.Trim();
 
         // Normalize and prune per-game profiles
         GameProfiles = GameProfiles

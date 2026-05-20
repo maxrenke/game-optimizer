@@ -54,6 +54,16 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial int[] GpuUtilHistory { get; set; } = new int[60];
     [ObservableProperty] public partial int GpuUtilHistoryIndex { get; set; }
 
+    // ── Latency ────────────────────────────────────────────────
+    [ObservableProperty] public partial int LatencyMs { get; set; }
+    [ObservableProperty] public partial int JitterMs { get; set; }
+    [ObservableProperty] public partial string LatencyText { get; set; } = "--";
+    [ObservableProperty] public partial Brush LatencyBrush { get; set; } =
+        new SolidColorBrush(Color.FromArgb(255, 120, 120, 120));
+    [ObservableProperty] public partial int[] LatencyHistory { get; set; } =
+        new int[LatencyMonitor.HistorySize];
+    [ObservableProperty] public partial int LatencyHistoryIndex { get; set; }
+
     // ── Bottleneck ─────────────────────────────────────────────
     [ObservableProperty] public partial BottleneckState Bottleneck { get; set; } = BottleneckState.None;
     [ObservableProperty] public partial string BottleneckLabel { get; set; } = "[--------]  No game running";
@@ -130,6 +140,17 @@ public partial class MainPageViewModel : ObservableObject
             GameCpuHistoryIndex = s.GameCpuHistoryIndex;
             GpuUtilHistory = s.GpuUtilHistory;
             GpuUtilHistoryIndex = s.GpuUtilHistoryIndex;
+
+            LatencyMs = s.LatencyMs;
+            JitterMs = s.JitterMs;
+            LatencyHistory = s.LatencyHistory;
+            LatencyHistoryIndex = s.LatencyHistoryIndex;
+            LatencyText = s.LatencyMs > 0 ? s.LatencyMs.ToString() : "--";
+            LatencyBrush = new SolidColorBrush(
+                s.LatencyMs <= 0   ? Color.FromArgb(255, 120, 120, 120)
+              : s.LatencyMs <= 60  ? Color.FromArgb(255, 80, 200, 100)
+              : s.LatencyMs <= 120 ? Color.FromArgb(255, 220, 170, 50)
+              :                      Color.FromArgb(255, 220, 60, 60));
 
             Bottleneck = s.Bottleneck;
             (BottleneckLabel, BottleneckBrush) = s.Bottleneck switch

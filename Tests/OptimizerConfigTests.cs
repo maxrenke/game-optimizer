@@ -108,6 +108,38 @@ public class OptimizerConfigTests
     }
 
     [Fact]
+    public void DefaultConfig_PingHost_IsCloudflare()
+    {
+        Assert.Equal("1.1.1.1", new OptimizerConfig().PingHost);
+    }
+
+    [Fact]
+    public void Validate_BlankPingHost_ResetToDefault()
+    {
+        var cfg = new OptimizerConfig { PingHost = "   " };
+        cfg.Validate();
+        Assert.Equal("1.1.1.1", cfg.PingHost);
+    }
+
+    [Fact]
+    public void Validate_PingHost_Trimmed()
+    {
+        var cfg = new OptimizerConfig { PingHost = "  8.8.8.8 " };
+        cfg.Validate();
+        Assert.Equal("8.8.8.8", cfg.PingHost);
+    }
+
+    [Fact]
+    public void PingHost_RoundTripsThroughJson()
+    {
+        var cfg = new OptimizerConfig { PingHost = "8.8.8.8" };
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Equal("8.8.8.8", loaded.PingHost);
+    }
+
+    [Fact]
     public void GamePaths_RoundTripThroughJson()
     {
         var cfg = new OptimizerConfig();

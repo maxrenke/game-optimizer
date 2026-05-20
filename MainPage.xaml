@@ -411,12 +411,16 @@
                             <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
                                 <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
                                            Foreground="#00C8E8"
-                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay}" />
-                                <TextBlock Text="KB/s" FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
+                                               Converter={StaticResource RateValueConverter}}" />
+                                <TextBlock FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3"
+                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
+                                               Converter={StaticResource RateUnitConverter}}" />
                             </StackPanel>
                             <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
-                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay}" />
+                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay,
+                                               Converter={StaticResource RateConverter}}" />
                             </TextBlock>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="1" Margin="16,0,0,0">
@@ -425,14 +429,52 @@
                             <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
                                 <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
                                            Foreground="#606060"
-                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay}" />
-                                <TextBlock Text="KB/s" FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
+                                               Converter={StaticResource RateValueConverter}}" />
+                                <TextBlock FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3"
+                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
+                                               Converter={StaticResource RateUnitConverter}}" />
                             </StackPanel>
                             <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
-                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay}" />
+                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay,
+                                               Converter={StaticResource RateConverter}}" />
                             </TextBlock>
                         </StackPanel>
+                    </Grid>
+
+                    <!-- Latency / jitter (what actually predicts game smoothness) -->
+                    <Border Height="1" Background="#14FFFFFF" Margin="0,4,0,3" />
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="PING" FontSize="9" Opacity="0.45"
+                                       CharacterSpacing="80" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                           Foreground="{x:Bind ViewModel.LatencyBrush, Mode=OneWay}"
+                                           Text="{x:Bind ViewModel.LatencyText, Mode=OneWay}" />
+                                <TextBlock Text="ms" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="1">
+                            <TextBlock Text="JITTER" FontSize="9" Opacity="0.45"
+                                       CharacterSpacing="80" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                           Opacity="0.75"
+                                           Text="{x:Bind ViewModel.JitterMs, Mode=OneWay}" />
+                                <TextBlock Text="ms" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Canvas Grid.Column="2" x:Name="LatencySparklineCanvas" Height="40"
+                                VerticalAlignment="Bottom" Margin="6,0,0,2" />
                     </Grid>
                 </StackPanel>
             </Border>

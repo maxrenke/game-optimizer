@@ -49,6 +49,10 @@
                              PlaceholderText="e.g. Ethernet 2" />
                     <TextBlock Text="Name from Get-NetAdapter. Leave blank to auto-detect."
                                FontSize="11" Opacity="0.6" />
+                    <TextBox Header="Ping host (latency/jitter)" Text="{x:Bind ViewModel.PingHost, Mode=TwoWay}"
+                             PlaceholderText="e.g. 1.1.1.1" />
+                    <TextBlock Text="Host pinged to measure latency and jitter. Default 1.1.1.1 (Cloudflare)."
+                               FontSize="11" Opacity="0.6" />
                 </StackPanel>
             </Expander>
 

@@ -22,6 +22,8 @@ public record OptimizerSnapshot(
     IReadOnlyList<string> BgProcesses,
     int[] GameCpuHistory, int GameCpuHistoryIndex,
     int[] GpuUtilHistory, int GpuUtilHistoryIndex,
+    int LatencyMs, int JitterMs,
+    int[] LatencyHistory, int LatencyHistoryIndex,
     bool DataReady);
 
 public class OptimizerService : IDisposable
@@ -33,6 +35,7 @@ public class OptimizerService : IDisposable
     private readonly SessionTracker _sessions;
     private readonly BottleneckDetector _bottleneck;
     private readonly AlertMonitor _alerts;
+    private readonly LatencyMonitor _latency;
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _log = new();
     private const int LogMax = 25;
 
@@ -84,6 +87,7 @@ public class OptimizerService : IDisposable
         _sessions = new SessionTracker();
         _bottleneck = new BottleneckDetector();
         _alerts = new AlertMonitor();
+        _latency = new LatencyMonitor(cfg.PingHost);
     }
 
     public void Start()
@@ -172,12 +176,18 @@ public class OptimizerService : IDisposable
 
         (_lastCoreData, _lastGpu) = await SampleHeavyAsync();
         _heavyReady = true;
+        _ = _latency.SampleAsync();   // kick off an early latency reading
 
         while (!ct.IsCancellationRequested)
         {
             _scanCount++;
 
             try { await ScanTickAsync(); } catch { }
+
+            // Ping every 2 ticks (~2s) - fire-and-forget so a slow/timed-out
+            // ping never stalls the scan loop; the snapshot reads the latest.
+            if (_scanCount % 2 == 0)
+                _ = _latency.SampleAsync();
 
             // Heavy WMI sampling every 3 scan ticks (3s cadence)
             if (_scanCount % 3 == 0)
@@ -267,6 +277,10 @@ public class OptimizerService : IDisposable
             GameCpuHistoryIndex: _cgHistIdx,
             GpuUtilHistory: (int[])_gpuUtilHistory.Clone(),
             GpuUtilHistoryIndex: _cgHistIdx,
+            LatencyMs: _latency.LastMs,
+            JitterMs: _latency.JitterMs,
+            LatencyHistory: (int[])_latency.History.Clone(),
+            LatencyHistoryIndex: _latency.HistoryIndex,
             DataReady: _heavyReady);
 
         SnapshotReady?.Invoke(snap);

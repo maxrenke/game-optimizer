@@ -32,7 +32,8 @@ When the game closes, all processes are restored to their original affinities an
 ### Real-time Dashboard
 - Per-zone CPU utilization (Game zone / Firefox+VLC zone / Background zone)
 - GPU metrics: utilization, VRAM, temperature, power draw, core/mem clocks
-- Network sparkline (RX/TX KB/s) with configurable window: 30s / 2m / 5m
+- Network sparkline (RX/TX, auto-scaling KB/s - MB/s) with configurable window: 30s / 2m / 5m
+- Latency and jitter: pings a reference host (default 1.1.1.1) - the metrics that actually predict online-game smoothness - with a colour-coded readout and sparkline
 - 1-minute CPU game-zone sparkline and GPU utilization sparkline
 - Bottleneck detector: CPU-bound / GPU-bound / Balanced / Headroom
 - Active zone process list - see exactly which processes are in each affinity zone
@@ -79,6 +80,7 @@ GameOptimizer/
   - CpuMonitor.cs            # PDH API per-core sampling (~5ms, persistent query)
   - GpuMonitor.cs            # nvidia-smi -> rocm-smi -> WDDM WMI fallback
   - NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer (300 samples / 5 min)
+  - LatencyMonitor.cs        # Ping-based round-trip latency + RFC 3550 jitter
   - SystemService.cs         # Win32PrioritySeparation, SysMain, timeBeginPeriod
   - MemoryService.cs         # Standby memory list purge (NtSetSystemInformation)
   - SessionTracker.cs        # Per-game session stats + report generation

@@ -22,7 +22,8 @@ public sealed partial class MainPage : Page
                                or nameof(ViewModel.TxHistory)
                                or nameof(ViewModel.NetHistoryIndex)
                                or nameof(ViewModel.GameCpuHistoryIndex)
-                               or nameof(ViewModel.GpuUtilHistoryIndex))
+                               or nameof(ViewModel.GpuUtilHistoryIndex)
+                               or nameof(ViewModel.LatencyHistoryIndex))
                 DrawSparklines();
         };
 
@@ -44,6 +45,19 @@ public sealed partial class MainPage : Page
         DrawNetworkSparklines();
         DrawCpuSparkline();
         DrawGpuSparkline();
+        DrawLatencySparkline();
+    }
+
+    private void DrawLatencySparkline()
+    {
+        LatencySparklineCanvas.Children.Clear();
+        double w = LatencySparklineCanvas.ActualWidth;
+        double h = LatencySparklineCanvas.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        int n = ViewModel.LatencyHistory.Length;
+        DrawLine(LatencySparklineCanvas, ViewModel.LatencyHistory, ViewModel.LatencyHistoryIndex, n, n,
+                 w, h, 0, Windows.UI.Color.FromArgb(255, 120, 180, 240), fill: true);
     }
 
     private void DrawNetworkSparklines()
