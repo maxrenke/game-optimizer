@@ -3,7 +3,6 @@ using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 using System.Runtime.InteropServices;
 
 namespace GameOptimizer.Tray;
@@ -14,6 +13,17 @@ public class TrayService : IDisposable
     private static extern nint LoadImage(nint hInst, string lpszName, uint uType, int cx, int cy, uint fuLoad);
     private const uint IMAGE_ICON = 1;
     private const uint LR_LOADFROMFILE = 0x10;
+
+    // The exe runs from the build root but assets may be staged under AppX\.
+    private static string? FindIconPath()
+    {
+        string[] candidates =
+        [
+            Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"),
+            Path.Combine(AppContext.BaseDirectory, "AppX", "Assets", "AppIcon.ico"),
+        ];
+        return candidates.FirstOrDefault(File.Exists);
+    }
 
     private TaskbarIcon? _icon;
     private readonly DispatcherQueue _dispatcher;
@@ -43,9 +53,11 @@ public class TrayService : IDisposable
     {
         _dispatcher.TryEnqueue(() =>
         {
+            // No IconSource: a BitmapImage from ms-appx loads asynchronously and
+            // is still blank when H.NotifyIcon renders the tray icon. The real
+            // icon is set synchronously below from a Win32 HICON.
             _icon = new TaskbarIcon
             {
-                IconSource = new BitmapImage(new Uri("ms-appx:///Assets/AppIcon.ico")),
                 ToolTipText = "Gaming Optimizer - Idle",
             };
 
@@ -111,11 +123,11 @@ public class TrayService : IDisposable
 
             _icon.ForceCreate(false);
 
-            // Load real Win32 HICON for taskbar
-            var icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-            if (System.IO.File.Exists(icoPath))
+            // Set the tray image from a real Win32 HICON loaded synchronously
+            var icoPath = FindIconPath();
+            if (icoPath is not null)
             {
-                var hIcon = LoadImage(0, icoPath, IMAGE_ICON, 0, 0, LR_LOADFROMFILE);
+                var hIcon = LoadImage(0, icoPath, IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
                 if (hIcon != 0) _icon.TrayIcon.UpdateIcon(hIcon);
             }
         });
