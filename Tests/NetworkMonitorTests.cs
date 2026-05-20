@@ -58,14 +58,37 @@ public class NetworkMonitorTests
         Assert.Equal(0, mon.HistoryIndex); // no NIC = no data written
     }
 
+    private static readonly string[] VirtualMarkers =
+        ["virtual", "bluetooth", "tunnel", "vpn", "tailscale", "wireguard",
+         "wintun", "tap-windows", "vethernet"];
+
+    private static bool LooksReal(NetworkInterface n) =>
+        n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+        n.NetworkInterfaceType != NetworkInterfaceType.Tunnel &&
+        !VirtualMarkers.Any(m =>
+            n.Description.Contains(m, StringComparison.OrdinalIgnoreCase) ||
+            n.Name.Contains(m, StringComparison.OrdinalIgnoreCase));
+
     [Fact]
-    public void AutoDetect_ReturnsOriginalName_WhenNicExists()
+    public void AutoDetect_HonorsExistingRealAdapter()
     {
-        var up = NetworkInterface.GetAllNetworkInterfaces()
-            .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up
-                              && n.NetworkInterfaceType != NetworkInterfaceType.Loopback);
-        if (up is null) return; // skip if no usable NICs on CI
-        Assert.Equal(up.Name, NetworkMonitor.AutoDetect(up.Name));
+        var real = NetworkInterface.GetAllNetworkInterfaces()
+            .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up && LooksReal(n));
+        if (real is null) return; // skip if no real NIC (e.g. CI)
+        Assert.Equal(real.Name, NetworkMonitor.AutoDetect(real.Name));
+    }
+
+    [Fact]
+    public void AutoDetect_RejectsVirtualPreferred_WhenRealAdapterExists()
+    {
+        var all = NetworkInterface.GetAllNetworkInterfaces();
+        var virtualNic = all.FirstOrDefault(n =>
+            n.OperationalStatus == OperationalStatus.Up && !LooksReal(n));
+        var realExists = all.Any(n =>
+            n.OperationalStatus == OperationalStatus.Up && LooksReal(n));
+        if (virtualNic is null || !realExists) return; // environment-dependent
+        // A VPN tunnel / virtual adapter must not be honored over a real NIC
+        Assert.NotEqual(virtualNic.Name, NetworkMonitor.AutoDetect(virtualNic.Name));
     }
 
     [Fact]
@@ -77,12 +100,13 @@ public class NetworkMonitorTests
     }
 
     [Fact]
-    public void AutoDetect_DoesNotReturnLoopback()
+    public void AutoDetect_ResultIsNeverTunnelOrLoopback()
     {
         var result = NetworkMonitor.AutoDetect("NonExistentNic_XYZ_12345");
         var nic = NetworkInterface.GetAllNetworkInterfaces()
             .FirstOrDefault(n => n.Name.Equals(result, StringComparison.OrdinalIgnoreCase));
         if (nic is null) return; // returned the original name (no physical NIC) - acceptable
         Assert.NotEqual(NetworkInterfaceType.Loopback, nic.NetworkInterfaceType);
+        Assert.NotEqual(NetworkInterfaceType.Tunnel, nic.NetworkInterfaceType);
     }
 }

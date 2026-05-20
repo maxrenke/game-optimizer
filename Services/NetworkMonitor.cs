@@ -70,19 +70,43 @@ public class NetworkMonitor
         _prevTime = now;
     }
 
-    // Try named NIC first, then auto-detect the fastest "Up" physical adapter
+    // Name/description fragments that mark a virtual or VPN interface rather
+    // than a real NIC carrying internet traffic.
+    private static readonly string[] VirtualMarkers =
+        ["virtual", "bluetooth", "tunnel", "vpn", "tailscale", "wireguard",
+         "wintun", "tap-windows", "loopback", "vethernet"];
+
+    private static bool IsRealAdapter(NetworkInterface n)
+    {
+        if (n.NetworkInterfaceType is NetworkInterfaceType.Loopback
+                                   or NetworkInterfaceType.Tunnel)
+            return false;
+        foreach (var m in VirtualMarkers)
+            if (n.Description.Contains(m, StringComparison.OrdinalIgnoreCase) ||
+                n.Name.Contains(m, StringComparison.OrdinalIgnoreCase))
+                return false;
+        return true;
+    }
+
+    private static long RxBytes(NetworkInterface n)
+    {
+        try { return n.GetIPStatistics().BytesReceived; } catch { return 0; }
+    }
+
+    // Honor the configured NIC only if it is a real adapter; otherwise pick the
+    // "Up" real adapter that has actually received the most traffic. Ordering
+    // by bytes received - not link speed - avoids VPN tunnels that advertise a
+    // huge fake speed (e.g. Tailscale at 100 Gbps) while carrying almost nothing.
     public static string AutoDetect(string preferred)
     {
-        if (FindNic(preferred) is not null) return preferred;
-        var fallback = NetworkInterface.GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up
-                     && n.NetworkInterfaceType != NetworkInterfaceType.Loopback
-                     && n.NetworkInterfaceType != NetworkInterfaceType.Tunnel
-                     && !n.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase)
-                     && !n.Description.Contains("Bluetooth", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(n => n.Speed)
+        var match = FindNic(preferred);
+        if (match is not null && IsRealAdapter(match)) return preferred;
+
+        var best = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == OperationalStatus.Up && IsRealAdapter(n))
+            .OrderByDescending(RxBytes)
             .FirstOrDefault();
-        return fallback?.Name ?? preferred;
+        return best?.Name ?? preferred;
     }
 
     private static NetworkInterface? FindNic(string name) =>

@@ -73,7 +73,7 @@ public class OptimizerService : IDisposable
         _cfg = cfg;
         var resolvedNic = NetworkMonitor.AutoDetect(cfg.NicName);
         if (resolvedNic != cfg.NicName)
-            AddLog($"[INIT] NIC '{cfg.NicName}' not found - auto-selected '{resolvedNic}'");
+            AddLog($"[INIT] NIC '{cfg.NicName}' unsuitable - monitoring '{resolvedNic}' instead");
         cfg.NicName = resolvedNic;
 
         _pm = new ProcessManager(cfg);
