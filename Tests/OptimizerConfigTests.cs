@@ -206,4 +206,67 @@ public class OptimizerConfigTests
         Assert.Equal(90, cfg.AlertCpuZonePct);
         Assert.Equal(4,  cfg.AlertSustainedTicks);
     }
+
+    // ── Validate: per-game profiles ──────────────────────────────────────────
+
+    [Fact]
+    public void Validate_ProfileName_TrimmedLowercasedExeStripped()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile { ProcessName = "  EldenRing.EXE  " }],
+        };
+        cfg.Validate();
+        Assert.Equal("eldenring", cfg.GameProfiles[0].ProcessName);
+    }
+
+    [Fact]
+    public void Validate_ProfileWithBlankName_IsDropped()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles =
+            [
+                new GameProfile { ProcessName = "   " },
+                new GameProfile { ProcessName = "eldenring" },
+            ],
+        };
+        cfg.Validate();
+        Assert.Single(cfg.GameProfiles);
+        Assert.Equal("eldenring", cfg.GameProfiles[0].ProcessName);
+    }
+
+    [Fact]
+    public void Validate_ProfileCorruptMask_ResetToZero()
+    {
+        // A non-zero mask referencing nonexistent cores falls back to 0 (use default)
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile { ProcessName = "game", AffinityMask = 1L << 60 }],
+        };
+        cfg.Validate();
+        Assert.Equal(0, cfg.GameProfiles[0].AffinityMask);
+    }
+
+    [Fact]
+    public void Validate_ProfileValidMask_LeftUnchanged()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile { ProcessName = "game", AffinityMask = 0b1 }],
+        };
+        cfg.Validate();
+        Assert.Equal(0b1, cfg.GameProfiles[0].AffinityMask);
+    }
+
+    [Fact]
+    public void Validate_ProfileInvalidPriority_ResetToHigh()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile { ProcessName = "game", Priority = "Ludicrous" }],
+        };
+        cfg.Validate();
+        Assert.Equal("High", cfg.GameProfiles[0].Priority);
+    }
 }

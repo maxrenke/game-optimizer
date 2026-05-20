@@ -57,6 +57,7 @@ When the game closes, all processes are restored to their original affinities an
 
 ### Settings
 - Configurable affinity masks (hex), alert thresholds, game paths, extra throttled processes
+- **Per-game profiles** - override CPU affinity and priority for specific games by process name; games with no profile use the global game mask at High priority
 - Start minimized / Start with Windows (creates a scheduled task at HIGHEST privilege)
 - Auto-detects NIC if the configured one is missing
 - **Reset All Process State** (Danger Zone) - immediately restores every process affinity and priority to Windows defaults, re-enables SysMain, and clears all internal pinning state. Useful if the app left processes in a bad state after a crash.
@@ -79,7 +80,8 @@ GameOptimizer/
   - AlertMonitor.cs          # Threshold-based thermal/utilization alerts
   - AffinityCalculator.cs    # P/E-core detection, zone mask generation
   - GameLibraryScanner.cs    # Steam/Epic/GOG/Ubisoft/EA path discovery
-  - OptimizerConfig.cs       # JSON config with auto-detect on first run
+  - OptimizerConfig.cs       # JSON config with auto-detect + Validate on load
+  - GameProfile.cs           # Per-game affinity/priority override model
 - ViewModels/
   - MainPageViewModel.cs     # CommunityToolkit.Mvvm, ApplySnapshot
   - SettingsViewModel.cs     # Config editing + schtasks wiring

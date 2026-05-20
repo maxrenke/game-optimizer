@@ -231,4 +231,91 @@ public class ProcessManagerTests
         var ex = Record.Exception(() => pm.Dispose());
         Assert.Null(ex);
     }
+
+    // ── ResolveGameSettings (per-game profiles) ──────────────────────────────
+
+    [Fact]
+    public void ResolveGameSettings_NoProfile_UsesGlobalMaskAndHigh()
+    {
+        var cfg = new OptimizerConfig { GameAffinityMask = 0x0FFF };
+        var (mask, priority) = ProcessManager.ResolveGameSettings(cfg, "eldenring");
+        Assert.Equal(0x0FFF, mask);
+        Assert.Equal(System.Diagnostics.ProcessPriorityClass.High, priority);
+    }
+
+    [Fact]
+    public void ResolveGameSettings_MatchingProfile_UsesProfileValues()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameAffinityMask = 0x0FFF,
+            GameProfiles = [new GameProfile
+            {
+                ProcessName = "eldenring", AffinityMask = 0x00FF, Priority = "AboveNormal"
+            }],
+        };
+        var (mask, priority) = ProcessManager.ResolveGameSettings(cfg, "eldenring");
+        Assert.Equal(0x00FF, mask);
+        Assert.Equal(System.Diagnostics.ProcessPriorityClass.AboveNormal, priority);
+    }
+
+    [Fact]
+    public void ResolveGameSettings_ProfileWithZeroMask_KeepsGlobalMask()
+    {
+        // AffinityMask 0 means "use the global mask" - only the priority overrides
+        var cfg = new OptimizerConfig
+        {
+            GameAffinityMask = 0x0FFF,
+            GameProfiles = [new GameProfile
+            {
+                ProcessName = "eldenring", AffinityMask = 0, Priority = "Normal"
+            }],
+        };
+        var (mask, priority) = ProcessManager.ResolveGameSettings(cfg, "eldenring");
+        Assert.Equal(0x0FFF, mask);
+        Assert.Equal(System.Diagnostics.ProcessPriorityClass.Normal, priority);
+    }
+
+    [Fact]
+    public void ResolveGameSettings_MatchIsCaseInsensitive_AndIgnoresExeSuffix()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile
+            {
+                ProcessName = "eldenring", AffinityMask = 0x0F, Priority = "High"
+            }],
+        };
+        var (mask, _) = ProcessManager.ResolveGameSettings(cfg, "EldenRing.exe");
+        Assert.Equal(0x0F, mask);
+    }
+
+    [Fact]
+    public void ResolveGameSettings_NonMatchingProfile_UsesGlobalMask()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameAffinityMask = 0x0FFF,
+            GameProfiles = [new GameProfile
+            {
+                ProcessName = "eldenring", AffinityMask = 0x0F, Priority = "High"
+            }],
+        };
+        var (mask, _) = ProcessManager.ResolveGameSettings(cfg, "hearthstone");
+        Assert.Equal(0x0FFF, mask);
+    }
+
+    [Fact]
+    public void ResolveGameSettings_ProfileWithInvalidPriority_FallsBackToHigh()
+    {
+        var cfg = new OptimizerConfig
+        {
+            GameProfiles = [new GameProfile
+            {
+                ProcessName = "eldenring", AffinityMask = 0x0F, Priority = "Turbo"
+            }],
+        };
+        var (_, priority) = ProcessManager.ResolveGameSettings(cfg, "eldenring");
+        Assert.Equal(System.Diagnostics.ProcessPriorityClass.High, priority);
+    }
 }

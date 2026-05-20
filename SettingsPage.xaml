@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:services="using:GameOptimizer.Services"
     mc:Ignorable="d"
     Background="Transparent">
 
@@ -57,6 +58,53 @@
                     <TextBox Header="Game affinity mask (hex)" Text="{x:Bind ViewModel.GameAffinityHex, Mode=TwoWay}" />
                     <TextBox Header="Firefox+VLC affinity mask (hex)" Text="{x:Bind ViewModel.FirefoxAffinityHex, Mode=TwoWay}" />
                     <TextBox Header="Background affinity mask (hex)" Text="{x:Bind ViewModel.BgAffinityHex, Mode=TwoWay}" />
+                </StackPanel>
+            </Expander>
+
+            <!-- Per-Game Profiles -->
+            <Expander Header="Per-Game Profiles" IsExpanded="False">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                        Override CPU affinity and priority for specific games by process name.
+                        A game with no profile uses the game affinity mask above at High priority.
+                        Leave the affinity blank to keep the default mask but change only priority.
+                    </TextBlock>
+                    <ListView ItemsSource="{x:Bind ViewModel.GameProfiles}" SelectionMode="None"
+                              MaxHeight="200">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="services:GameProfile">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind Summary}" VerticalAlignment="Center"
+                                               FontFamily="Consolas" FontSize="11" />
+                                    <Button Grid.Column="1" Content="&#xE74D;"
+                                            FontFamily="Segoe Fluent Icons" FontSize="12"
+                                            Click="RemoveProfile_Click" Tag="{x:Bind}"
+                                            Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox PlaceholderText="process name (no .exe)"
+                                 Text="{x:Bind ViewModel.NewProfileName, Mode=TwoWay}" />
+                        <TextBox Grid.Column="1" Width="110" PlaceholderText="affinity hex"
+                                 Text="{x:Bind ViewModel.NewProfileAffinityHex, Mode=TwoWay}" />
+                        <ComboBox Grid.Column="2" Width="130"
+                                  ItemsSource="{x:Bind ViewModel.PriorityOptions}"
+                                  SelectedItem="{x:Bind ViewModel.NewProfilePriority, Mode=TwoWay}" />
+                        <Button Grid.Column="3" Content="Add"
+                                Command="{x:Bind ViewModel.AddProfileCommand}" />
+                    </Grid>
                 </StackPanel>
             </Expander>
 

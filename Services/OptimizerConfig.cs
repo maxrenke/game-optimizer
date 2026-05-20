@@ -31,6 +31,12 @@ public class OptimizerConfig
 
     public List<string> ExtraThrottledProcs { get; set; } = [];
 
+    /// <summary>
+    /// Optional per-game affinity/priority overrides. A game with no matching
+    /// profile uses <see cref="GameAffinityMask"/> and High priority.
+    /// </summary>
+    public List<GameProfile> GameProfiles { get; set; } = [];
+
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;
 
@@ -77,6 +83,25 @@ public class OptimizerConfig
         AlertGpuUtilPct     = Math.Clamp(AlertGpuUtilPct, 50, 100);
         AlertCpuZonePct     = Math.Clamp(AlertCpuZonePct, 50, 100);
         AlertSustainedTicks = Math.Clamp(AlertSustainedTicks, 1, 20);
+
+        // Normalize and prune per-game profiles
+        GameProfiles = GameProfiles
+            .Where(p => !string.IsNullOrWhiteSpace(p.ProcessName))
+            .Select(p =>
+            {
+                p.ProcessName = p.ProcessName.Trim()
+                    .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+                    .ToLowerInvariant();
+                // 0 stays 0 ("use default"); a non-zero corrupt mask also
+                // falls back to 0 rather than pinning the game to nothing.
+                if (p.AffinityMask != 0 && (p.AffinityMask & ~allCores) != 0)
+                    p.AffinityMask = 0;
+                if (!Enum.TryParse<System.Diagnostics.ProcessPriorityClass>(
+                        p.Priority, ignoreCase: true, out _))
+                    p.Priority = "High";
+                return p;
+            })
+            .ToList();
     }
 
     // A mask is valid only if it is non-zero and references real cores.

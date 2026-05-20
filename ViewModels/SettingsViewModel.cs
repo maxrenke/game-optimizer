@@ -30,9 +30,17 @@ public partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
+    public ObservableCollection<GameProfile> GameProfiles { get; } = [];
 
     [ObservableProperty] public partial string NewGamePath { get; set; } = "";
     [ObservableProperty] public partial string NewThrottledProc { get; set; } = "";
+
+    // ── Per-game profile add form ──────────────────────────────
+    public string[] PriorityOptions { get; } = ["Normal", "AboveNormal", "High"];
+
+    [ObservableProperty] public partial string NewProfileName { get; set; } = "";
+    [ObservableProperty] public partial string NewProfileAffinityHex { get; set; } = "";
+    [ObservableProperty] public partial string NewProfilePriority { get; set; } = "High";
 
     [RelayCommand]
     private void AddGamePath()
@@ -61,6 +69,34 @@ public partial class SettingsViewModel : ObservableObject
     private void RemoveThrottledProc(string proc) => ExtraThrottledProcs.Remove(proc);
 
     [RelayCommand]
+    private void AddProfile()
+    {
+        var name = NewProfileName.Trim()
+            .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
+        if (name.Length == 0) return;
+        if (GameProfiles.Any(p => p.ProcessName == name)) return;
+
+        long mask = 0;
+        var hex = NewProfileAffinityHex.Trim()
+            .Replace("0x", "", StringComparison.OrdinalIgnoreCase);
+        if (hex.Length > 0)
+            try { mask = Convert.ToInt64(hex, 16); } catch { mask = 0; }
+
+        GameProfiles.Add(new GameProfile
+        {
+            ProcessName  = name,
+            AffinityMask = mask,
+            Priority     = string.IsNullOrWhiteSpace(NewProfilePriority) ? "High" : NewProfilePriority,
+        });
+        NewProfileName        = "";
+        NewProfileAffinityHex = "";
+        NewProfilePriority    = "High";
+    }
+
+    public void RemoveProfile(GameProfile profile) => GameProfiles.Remove(profile);
+
+    [RelayCommand]
     private void Save()
     {
         try
@@ -76,6 +112,7 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.AlertSustainedTicks = AlertSustainedTicks;
             _cfg.GamePaths = [.. GamePaths];
             _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
+            _cfg.GameProfiles = [.. GameProfiles];
             _cfg.StartMinimized = StartMinimized;
             _cfg.StartWithWindows = StartWithWindows;
             _cfg.Save();
@@ -123,6 +160,8 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var p in _cfg.GamePaths) GamePaths.Add(p);
         ExtraThrottledProcs.Clear();
         foreach (var p in _cfg.ExtraThrottledProcs) ExtraThrottledProcs.Add(p);
+        GameProfiles.Clear();
+        foreach (var p in _cfg.GameProfiles) GameProfiles.Add(p);
         StartMinimized = _cfg.StartMinimized;
         StartWithWindows = _cfg.StartWithWindows;
     }

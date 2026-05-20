@@ -1,3 +1,4 @@
+using GameOptimizer.Services;
 using GameOptimizer.ViewModels;
 using Microsoft.UI.Xaml.Controls;
 
@@ -14,6 +15,12 @@ public sealed partial class SettingsPage : Page
 
     private void BackBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         => App.Window.ShowMain();
+
+    private void RemoveProfile_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: GameProfile profile })
+            ViewModel.RemoveProfile(profile);
+    }
 
     private void SaveBackBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {

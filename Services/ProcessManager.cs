@@ -55,7 +55,6 @@ public class ProcessManager : IDisposable
         _allCores = (IntPtr)allBits;
     }
 
-    public IntPtr GameAffinity => (IntPtr)_cfg.GameAffinityMask;
     public IntPtr FirefoxAffinity => (IntPtr)_cfg.FirefoxAffinityMask;
     public IntPtr BgAffinity => (IntPtr)_cfg.BgAffinityMask;
 
@@ -178,9 +177,12 @@ public class ProcessManager : IDisposable
         {
             foreach (var pid in ActiveGames.Keys.ToList())
             {
+                if (!ActiveGames.TryGetValue(pid, out var gameName)) continue;
                 using var p = SafeGetProcess(pid);
-                if (p is not null && p.ProcessorAffinity.ToInt64() != _cfg.GameAffinityMask)
-                    try { p.ProcessorAffinity = GameAffinity; } catch { }
+                if (p is null) continue;
+                var (mask, _) = ResolveGameSettings(_cfg, gameName);
+                if (p.ProcessorAffinity.ToInt64() != mask)
+                    try { p.ProcessorAffinity = (IntPtr)mask; } catch { }
             }
         }
 
@@ -285,9 +287,11 @@ public class ProcessManager : IDisposable
     {
         foreach (var pid in ActiveGames.Keys)
         {
+            if (!ActiveGames.TryGetValue(pid, out var gameName)) continue;
             using var p = SafeGetProcess(pid);
             if (p is null) continue;
-            try { p.ProcessorAffinity = GameAffinity; p.PriorityClass = ProcessPriorityClass.High; } catch { }
+            var (mask, priority) = ResolveGameSettings(_cfg, gameName);
+            try { p.ProcessorAffinity = (IntPtr)mask; p.PriorityClass = priority; } catch { }
         }
         foreach (var proc in SafeGetProcessesByName("firefox").Concat(SafeGetProcessesByName("vlc")))
         {
@@ -348,14 +352,36 @@ public class ProcessManager : IDisposable
         });
     }
 
+    /// <summary>
+    /// Resolves the affinity mask and priority for a game, honoring any matching
+    /// per-game profile in <paramref name="cfg"/>. Falls back to the global game
+    /// affinity mask and High priority when no profile matches.
+    /// </summary>
+    public static (long affinityMask, ProcessPriorityClass priority) ResolveGameSettings(
+        OptimizerConfig cfg, string procName)
+    {
+        var name = procName.Replace(".exe", "", StringComparison.OrdinalIgnoreCase);
+        var profile = cfg.GameProfiles.FirstOrDefault(p =>
+            p.ProcessName.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        long mask = profile is { AffinityMask: not 0 }
+            ? profile.AffinityMask
+            : cfg.GameAffinityMask;
+        var priority = profile is not null
+            && Enum.TryParse<ProcessPriorityClass>(profile.Priority, ignoreCase: true, out var p)
+            ? p : ProcessPriorityClass.High;
+        return (mask, priority);
+    }
+
     private bool ApplyGame(Process proc)
     {
         try
         {
             if (PinningEnabled)
             {
-                proc.PriorityClass = ProcessPriorityClass.High;
-                proc.ProcessorAffinity = GameAffinity;
+                var (mask, priority) = ResolveGameSettings(_cfg, proc.ProcessName);
+                proc.PriorityClass = priority;
+                proc.ProcessorAffinity = (IntPtr)mask;
             }
             return true;
         }
