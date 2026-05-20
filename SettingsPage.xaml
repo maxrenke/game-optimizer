@@ -35,6 +35,10 @@
                                   IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
                     <ToggleSwitch Header="Start with Windows"
                                   IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+                    <ToggleSwitch Header="Flush standby RAM when a game launches"
+                                  IsOn="{x:Bind ViewModel.AutoFlushStandby, Mode=TwoWay}" />
+                    <TextBlock Text="Purges the Windows standby memory list so a game starts with more free RAM."
+                               FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
                 </StackPanel>
             </Expander>
 
@@ -144,9 +148,7 @@
                                                FontFamily="Consolas" FontSize="11" />
                                     <Button Grid.Column="1" Content="&#xE74D;"
                                             FontFamily="Segoe Fluent Icons" FontSize="12"
-                                            Command="{Binding DataContext.ViewModel.RemoveGamePathCommand,
-                                                ElementName=RootPage}"
-                                            CommandParameter="{x:Bind}"
+                                            Click="RemoveGamePath_Click" Tag="{x:Bind}"
                                             Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
                                 </Grid>
                             </DataTemplate>
@@ -182,9 +184,7 @@
                                     <TextBlock Text="{x:Bind}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="12" />
                                     <Button Grid.Column="1" Content="&#xE74D;"
                                             FontFamily="Segoe Fluent Icons" FontSize="12"
-                                            Command="{Binding DataContext.ViewModel.RemoveThrottledProcCommand,
-                                                ElementName=RootPage}"
-                                            CommandParameter="{x:Bind}"
+                                            Click="RemoveThrottledProc_Click" Tag="{x:Bind}"
                                             Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
                                 </Grid>
                             </DataTemplate>

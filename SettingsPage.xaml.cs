@@ -22,6 +22,18 @@ public sealed partial class SettingsPage : Page
             ViewModel.RemoveProfile(profile);
     }
 
+    private void RemoveGamePath_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string path })
+            ViewModel.RemoveGamePathCommand.Execute(path);
+    }
+
+    private void RemoveThrottledProc_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string proc })
+            ViewModel.RemoveThrottledProcCommand.Execute(proc);
+    }
+
     private void SaveBackBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         ViewModel.SaveCommand.Execute(null);
