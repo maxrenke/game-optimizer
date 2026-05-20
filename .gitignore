@@ -1,13 +1,29 @@
+# Build output
 bin/
 obj/
+publish/
+
+# Visual Studio
 *.user
 .vs/
-Properties/PublishProfiles/
 *.suo
 *.userprefs
+
+# MSIX / packaging
 AppPackages/
 BundleArtifacts/
 Package.StoreAssociation.xml
 _pkginfo.txt
 *.appxsym
+*.msix
+*.msixbundle
+
+# Claude Code
 .claude/
+
+# User-specific launch settings
+Properties/PublishProfiles/
+
+# Screenshots (tracked manually; add real screenshots to docs/screenshots/)
+docs/screenshots/*.png
+docs/screenshots/*.gif
