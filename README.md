@@ -15,7 +15,7 @@ Demotes background processes. Restores everything on exit.
 
 **[⬇ Download](https://github.com/maxrenke/game-optimizer/releases/latest)** · **[Changelog](CHANGELOG.md)** · **[Contributing](CONTRIBUTING.md)**
 
-<!-- Add dashboard GIF here: docs/screenshots/dashboard.gif -->
+<img src="docs/screenshots/dashboard.gif" alt="Gaming Optimizer - live dashboard while gaming" width="900">
 
 </div>
 
