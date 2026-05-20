@@ -12,6 +12,10 @@ public class NetworkMonitor
     private long _prevRx, _prevTx;
     private DateTime _prevTime = DateTime.UtcNow;
 
+    // Resolving a NIC enumerates every adapter - cache it and only
+    // re-resolve when the cached adapter goes away (throws on query).
+    private NetworkInterface? _nic;
+
     public string NicName { get; set; }
 
     public int[] RxHistory => _rxHistory;
@@ -30,19 +34,27 @@ public class NetworkMonitor
 
     private void InitBaseline()
     {
-        var nic = FindNic(NicName);
-        if (nic is null) return;
-        var stats = nic.GetIPStatistics();
+        var stats = SafeGetStats();
+        if (stats is null) return;
         _prevRx = stats.BytesReceived;
         _prevTx = stats.BytesSent;
         _prevTime = DateTime.UtcNow;
     }
 
+    // Returns stats from the cached NIC; re-resolves once if the cached
+    // adapter has gone away. Null when no matching adapter exists.
+    private IPInterfaceStatistics? SafeGetStats()
+    {
+        _nic ??= FindNic(NicName);
+        if (_nic is null) return null;
+        try { return _nic.GetIPStatistics(); }
+        catch { _nic = null; return null; }
+    }
+
     public void Sample()
     {
-        var nic = FindNic(NicName);
-        if (nic is null) return;
-        var stats = nic.GetIPStatistics();
+        var stats = SafeGetStats();
+        if (stats is null) return;
         var now = DateTime.UtcNow;
         var dt = (now - _prevTime).TotalSeconds;
         if (dt > 0 && _prevRx > 0)

@@ -54,22 +54,29 @@ public class BottleneckDetectorTests
     }
 
     [Fact]
-    public void RollingWindow_EarlySamplesCanBeOverridden()
+    public void FirstSample_ImmediatelyReflected_NotDraggedToZero()
     {
-        // Start with high GPU readings but then shift to low - window rolls
+        // The window is seeded with the first sample, so a single high-GPU
+        // update is recognized immediately rather than averaged against an
+        // empty (zero-filled) history buffer.
+        var d = new BottleneckDetector();
+        d.Update(50, MakeGpu(95), true);
+        Assert.Equal(BottleneckState.Gpu, d.Current);
+    }
+
+    [Fact]
+    public void RollingWindow_OldSamplesAgeOut()
+    {
         var d = new BottleneckDetector();
 
-        // 3 high samples
-        for (int i = 0; i < 3; i++)
-            d.Update(50, MakeGpu(95), true);
-
-        // After only 3 samples (window=5), avg is 57 which is Balanced not Gpu
-        // The avg of [95,95,95,0,0] = 57
-        Assert.NotEqual(BottleneckState.Gpu, d.Current);
-
-        // Now fill window with 5 high GPU samples - should stabilize to Gpu
+        // Saturate the window with high GPU -> GPU-bound
         for (int i = 0; i < 5; i++)
             d.Update(50, MakeGpu(95), true);
         Assert.Equal(BottleneckState.Gpu, d.Current);
+
+        // Feed low samples - after 5 updates the window has fully rolled over
+        for (int i = 0; i < 5; i++)
+            d.Update(30, MakeGpu(30), true);
+        Assert.Equal(BottleneckState.Headroom, d.Current);
     }
 }

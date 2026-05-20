@@ -145,4 +145,65 @@ public class OptimizerConfigTests
             File.Delete(tmpPath);
         }
     }
+
+    // ── Validate ─────────────────────────────────────────────────────────────
+
+    private static long AllCores => (1L << Environment.ProcessorCount) - 1;
+
+    [Fact]
+    public void Validate_ZeroAffinityMask_ResetsToAllCores()
+    {
+        var cfg = new OptimizerConfig { GameAffinityMask = 0 };
+        cfg.Validate();
+        Assert.Equal(AllCores, cfg.GameAffinityMask);
+    }
+
+    [Fact]
+    public void Validate_MaskWithNonexistentCores_ResetsToAllCores()
+    {
+        // A bit set well beyond any real core count
+        var cfg = new OptimizerConfig { BgAffinityMask = 1L << 60 };
+        cfg.Validate();
+        Assert.Equal(AllCores, cfg.BgAffinityMask);
+    }
+
+    [Fact]
+    public void Validate_ValidMask_LeftUnchanged()
+    {
+        // Bit 0 always exists
+        var cfg = new OptimizerConfig { GameAffinityMask = 0b1 };
+        cfg.Validate();
+        Assert.Equal(0b1, cfg.GameAffinityMask);
+    }
+
+    [Fact]
+    public void Validate_AlertThresholds_ClampedToValidRanges()
+    {
+        var cfg = new OptimizerConfig
+        {
+            AlertGpuTempC       = 999,
+            AlertVramPct        = 5,
+            AlertGpuUtilPct     = 0,
+            AlertCpuZonePct     = 200,
+            AlertSustainedTicks = 999,
+        };
+        cfg.Validate();
+        Assert.Equal(110, cfg.AlertGpuTempC);
+        Assert.Equal(50,  cfg.AlertVramPct);
+        Assert.Equal(50,  cfg.AlertGpuUtilPct);
+        Assert.Equal(100, cfg.AlertCpuZonePct);
+        Assert.Equal(20,  cfg.AlertSustainedTicks);
+    }
+
+    [Fact]
+    public void Validate_ValidThresholds_LeftUnchanged()
+    {
+        var cfg = new OptimizerConfig(); // defaults are all in range
+        cfg.Validate();
+        Assert.Equal(80, cfg.AlertGpuTempC);
+        Assert.Equal(90, cfg.AlertVramPct);
+        Assert.Equal(95, cfg.AlertGpuUtilPct);
+        Assert.Equal(90, cfg.AlertCpuZonePct);
+        Assert.Equal(4,  cfg.AlertSustainedTicks);
+    }
 }

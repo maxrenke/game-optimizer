@@ -45,15 +45,43 @@ public class OptimizerConfig
         {
             if (File.Exists(ConfigPath))
             {
-                var json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize<OptimizerConfig>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                    ?? CreateDefault();
+                var loaded = JsonSerializer.Deserialize<OptimizerConfig>(
+                    File.ReadAllText(ConfigPath),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (loaded is not null)
+                {
+                    loaded.Validate();
+                    return loaded;
+                }
             }
         }
         catch { }
         return CreateDefault();
     }
+
+    /// <summary>
+    /// Clamps all values to safe ranges. A corrupt affinity mask (zero, or
+    /// referencing cores that do not exist) would pin a game to no cores at
+    /// all - those fall back to the all-cores mask. Alert thresholds are
+    /// clamped to the ranges enforced by the Settings UI.
+    /// </summary>
+    public void Validate()
+    {
+        long allCores = (1L << Environment.ProcessorCount) - 1;
+        GameAffinityMask    = SanitizeMask(GameAffinityMask, allCores);
+        FirefoxAffinityMask = SanitizeMask(FirefoxAffinityMask, allCores);
+        BgAffinityMask      = SanitizeMask(BgAffinityMask, allCores);
+
+        AlertGpuTempC       = Math.Clamp(AlertGpuTempC, 50, 110);
+        AlertVramPct        = Math.Clamp(AlertVramPct, 50, 100);
+        AlertGpuUtilPct     = Math.Clamp(AlertGpuUtilPct, 50, 100);
+        AlertCpuZonePct     = Math.Clamp(AlertCpuZonePct, 50, 100);
+        AlertSustainedTicks = Math.Clamp(AlertSustainedTicks, 1, 20);
+    }
+
+    // A mask is valid only if it is non-zero and references real cores.
+    private static long SanitizeMask(long mask, long allCores) =>
+        mask != 0 && (mask & ~allCores) == 0 ? mask : allCores;
 
     private static OptimizerConfig CreateDefault()
     {
