@@ -37,7 +37,7 @@ jobs:
         run: Compress-Archive -Path publish/win-x64/* -DestinationPath GameOptimizer-${{ github.ref_name }}-win-x64.zip
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "Gaming Optimizer ${{ github.ref_name }}"
           body: |
