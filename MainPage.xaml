@@ -19,11 +19,18 @@
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
+    <!-- ── Warm-up bar: thin indeterminate strip until the first sample lands ── -->
+    <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3" Margin="0"
+                 CornerRadius="0" Background="Transparent"
+                 Visibility="{x:Bind ViewModel.IsWarmingUp, Mode=OneWay,
+                              Converter={StaticResource BoolToVisibilityConverter}}" />
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
         <StackPanel Spacing="5" Padding="10,6,10,6">
 
             <!-- ── Status bar ─────────────────────────────────────── -->
@@ -507,7 +514,7 @@
     </ScrollViewer>
 
     <!-- ── Footer (pinned to bottom, always visible) ──────── -->
-    <Grid Grid.Row="1" Padding="10,4,10,8">
+    <Grid Grid.Row="2" Padding="10,4,10,8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
@@ -547,41 +554,6 @@
         </Button>
     </Grid>
 
-
-    <!-- ── Startup banner (visible until first snapshot arrives) ── -->
-    <Border Grid.Row="0" Grid.RowSpan="2"
-            Visibility="{x:Bind ViewModel.HasData, Mode=OneWay,
-                         Converter={StaticResource InvertBoolToVisibilityConverter}}"
-            VerticalAlignment="Center" HorizontalAlignment="Center"
-            CornerRadius="10" Padding="32,24" BorderThickness="1"
-            BorderBrush="#28FFFFFF" MaxWidth="400">
-        <Border.Background>
-            <SolidColorBrush Color="#0D1017" Opacity="0.97" />
-        </Border.Background>
-        <StackPanel Spacing="14" HorizontalAlignment="Center">
-            <ProgressRing IsActive="True" Width="36" Height="36"
-                          HorizontalAlignment="Center"
-                          Foreground="#3CC8F0" />
-            <StackPanel Spacing="4">
-                <TextBlock Text="Collecting first sample..."
-                           FontSize="15" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" />
-                <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap"
-                           TextAlignment="Center">
-                    Reading CPU cores and GPU data for the first time.
-                    This takes 3-5 seconds on startup.
-                </TextBlock>
-            </StackPanel>
-            <StackPanel Spacing="3" Opacity="0.5">
-                <TextBlock FontSize="11" HorizontalAlignment="Center">
-                    No process changes have been made yet.
-                </TextBlock>
-                <TextBlock FontSize="11" HorizontalAlignment="Center">
-                    CPU affinity pinning is OFF by default.
-                </TextBlock>
-            </StackPanel>
-        </StackPanel>
-    </Border>
 
     </Grid>
 </Page>

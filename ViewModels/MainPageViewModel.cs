@@ -82,14 +82,14 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial string ReportDir { get; set; } = SessionTracker.ReportDir;
 
     // ── Startup state ──────────────────────────────────────────
-    /// <summary>False until the first snapshot arrives; hides the startup banner.</summary>
-    [ObservableProperty] public partial bool HasData { get; set; } = false;
+    /// <summary>True until the first real CPU/GPU sample lands; drives the warm-up bar.</summary>
+    [ObservableProperty] public partial bool IsWarmingUp { get; set; } = true;
 
     public void ApplySnapshot(OptimizerSnapshot s)
     {
         _dispatcher.TryEnqueue(() =>
         {
-            HasData = true;
+            IsWarmingUp = !s.DataReady;
             IsGaming = s.IsGaming;
             GameName = s.GameName;
             UptimeText = $"{(int)s.Uptime.TotalHours:D2}h {s.Uptime.Minutes:D2}m {s.Uptime.Seconds:D2}s";

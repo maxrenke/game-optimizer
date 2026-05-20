@@ -21,7 +21,8 @@ public record OptimizerSnapshot(
     IReadOnlyList<string> MediaProcesses,
     IReadOnlyList<string> BgProcesses,
     int[] GameCpuHistory, int GameCpuHistoryIndex,
-    int[] GpuUtilHistory, int GpuUtilHistoryIndex);
+    int[] GpuUtilHistory, int GpuUtilHistoryIndex,
+    bool DataReady);
 
 public class OptimizerService : IDisposable
 {
@@ -45,6 +46,7 @@ public class OptimizerService : IDisposable
     // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
     private int[] _lastCoreData = [];
     private GpuData? _lastGpu;
+    private bool _heavyReady;   // true once the first CPU/GPU sample has landed
 
     // 60-sample (1-minute) CPU and GPU history, written every tick
     private const int CpuGpuHistorySize = 60;
@@ -164,10 +166,12 @@ public class OptimizerService : IDisposable
 
     private async Task LoopAsync(CancellationToken ct)
     {
-        // Emit snapshot immediately so UI shows something while heavy sample loads
+        // Emit snapshot immediately so the UI renders its layout while the
+        // first (slow) CPU/GPU sample loads - DataReady is still false here
         try { await ScanTickAsync(); } catch { }
 
         (_lastCoreData, _lastGpu) = await SampleHeavyAsync();
+        _heavyReady = true;
 
         while (!ct.IsCancellationRequested)
         {
@@ -262,7 +266,8 @@ public class OptimizerService : IDisposable
             GameCpuHistory: (int[])_cpuGameHistory.Clone(),
             GameCpuHistoryIndex: _cgHistIdx,
             GpuUtilHistory: (int[])_gpuUtilHistory.Clone(),
-            GpuUtilHistoryIndex: _cgHistIdx);
+            GpuUtilHistoryIndex: _cgHistIdx,
+            DataReady: _heavyReady);
 
         SnapshotReady?.Invoke(snap);
         return Task.CompletedTask;
