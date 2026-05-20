@@ -37,6 +37,17 @@ public class OptimizerConfig
     /// </summary>
     public List<GameProfile> GameProfiles { get; set; } = [];
 
+    /// <summary>
+    /// Background apps to fully suspend while a game runs. Defaults to common
+    /// cloud-sync clients, which are the main cause of mid-game disk stutter.
+    /// </summary>
+    public List<SuspendApp> SuspendDuringGame { get; set; } =
+    [
+        new() { ProcessName = "onedrive",      Enabled = true },
+        new() { ProcessName = "dropbox",       Enabled = true },
+        new() { ProcessName = "googledrivefs", Enabled = true },
+    ];
+
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;
 
@@ -103,6 +114,18 @@ public class OptimizerConfig
                         p.Priority, ignoreCase: true, out _))
                     p.Priority = "High";
                 return p;
+            })
+            .ToList();
+
+        // Normalize and prune the suspend-during-game list
+        SuspendDuringGame = SuspendDuringGame
+            .Where(a => !string.IsNullOrWhiteSpace(a.ProcessName))
+            .Select(a =>
+            {
+                a.ProcessName = a.ProcessName.Trim()
+                    .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+                    .ToLowerInvariant();
+                return a;
             })
             .ToList();
     }

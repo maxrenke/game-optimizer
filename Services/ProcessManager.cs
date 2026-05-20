@@ -40,6 +40,11 @@ public class ProcessManager : IDisposable
     // Track every PID we've modified so ReleasePinning/RestoreAll only touches those
     private readonly ConcurrentDictionary<int, byte> _modifiedPids = new();
 
+    // PIDs this instance has suspended; resumed when the game ends / pinning off
+    private readonly ConcurrentDictionary<int, string> _suspendedPids = new();
+
+    public IReadOnlyList<string> SuspendedProcessNames => [.. _suspendedPids.Values.Distinct()];
+
     // WMI event watchers for instant process start/stop detection
     private ManagementEventWatcher? _startWatcher;
     private ManagementEventWatcher? _stopWatcher;
@@ -119,6 +124,7 @@ public class ProcessManager : IDisposable
                         {
                             proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                             proc.ProcessorAffinity = BgAffinity;
+                            ProcessControl.SetIoPriorityVeryLow(pid);
                             _modifiedPids[pid] = 0;
                             _appliedBgProcs[pid] = name;
                         }
@@ -215,11 +221,64 @@ public class ProcessManager : IDisposable
             }
         }
 
+        ReconcileSuspension();
+
         PruneDeadPids(_appliedMediaZone);
         PruneDeadPids(_appliedBgProcs);
         PruneDeadPids(_pathFailCache);
+        PruneDeadPids(_suspendedPids);
 
         return newGames;
+    }
+
+    /// <summary>
+    /// Suspends or resumes the configured background apps depending on whether
+    /// a game is active. Gated on <see cref="PinningEnabled"/> so the
+    /// pinning-off state remains a guaranteed no-op.
+    /// </summary>
+    private void ReconcileSuspension()
+    {
+        if (PinningEnabled && !ActiveGames.IsEmpty)
+        {
+            foreach (var app in _cfg.SuspendDuringGame)
+            {
+                if (!app.Enabled || string.IsNullOrWhiteSpace(app.ProcessName)) continue;
+                foreach (var proc in SafeGetProcessesByName(app.ProcessName))
+                {
+                    using (proc)
+                    {
+                        if (proc.Id == Environment.ProcessId) continue;
+                        if (_suspendedPids.ContainsKey(proc.Id)) continue;
+                        if (ProcessControl.Suspend(proc.Id))
+                        {
+                            _suspendedPids[proc.Id] = proc.ProcessName;
+                            LogEntry?.Invoke(
+                                $"[SUSPEND] Paused {proc.ProcessName} (PID {proc.Id}) - game running");
+                        }
+                    }
+                }
+            }
+        }
+        else if (!_suspendedPids.IsEmpty)
+        {
+            ResumeAllSuspended();
+        }
+    }
+
+    /// <summary>
+    /// Resumes every process this instance suspended. Safe to call at any time;
+    /// invoked automatically when no game is active and on every teardown path.
+    /// </summary>
+    public void ResumeAllSuspended()
+    {
+        foreach (var pid in _suspendedPids.Keys.ToList())
+        {
+            if (_suspendedPids.TryRemove(pid, out var name))
+            {
+                ProcessControl.Resume(pid);
+                LogEntry?.Invoke($"[SUSPEND] Resumed {name} (PID {pid})");
+            }
+        }
     }
 
     /// <summary>
@@ -242,6 +301,7 @@ public class ProcessManager : IDisposable
                     {
                         proc.PriorityClass = ProcessPriorityClass.BelowNormal;
                         proc.ProcessorAffinity = BgAffinity;
+                        ProcessControl.SetIoPriorityVeryLow(proc.Id);
                         _modifiedPids[proc.Id] = 0;
                         _appliedBgProcs[proc.Id] = proc.ProcessName;
                     }
@@ -263,11 +323,14 @@ public class ProcessManager : IDisposable
 
     public void ReleasePinning()
     {
+        ResumeAllSuspended();
+
         // Only reset PIDs we actually modified - no full process scan needed
         var pidsToReset = _modifiedPids.Keys.ToList();
 
         Parallel.ForEach(pidsToReset, pid =>
         {
+            ProcessControl.SetIoPriorityNormal(pid);
             using var p = SafeGetProcess(pid);
             if (p is null) return;
             try
@@ -313,7 +376,8 @@ public class ProcessManager : IDisposable
 
     /// <summary>
     /// Wipes all internal tracking state without touching any live processes.
-    /// Call this after <see cref="RestoreAll"/> to fully reset to a clean slate.
+    /// Call this only after <see cref="RestoreAll"/>, which resumes suspended
+    /// processes - clearing first would orphan a frozen process.
     /// Safe to call at any time; subsequent <see cref="Scan"/> calls work normally.
     /// </summary>
     public void ClearState()
@@ -323,20 +387,25 @@ public class ProcessManager : IDisposable
         _appliedBgProcs.Clear();
         _modifiedPids.Clear();
         _pathFailCache.Clear();
+        _suspendedPids.Clear();
     }
 
     /// <summary>
-    /// Restores every process in <c>_modifiedPids</c> to all-cores affinity and Normal priority.
-    /// Only touches PIDs that this instance actually modified - no full process scan.
-    /// Does NOT clear internal tracking state; call <see cref="ClearState"/> afterward if needed.
+    /// Undoes everything this instance changed: resumes suspended processes and
+    /// restores every modified PID to all-cores affinity, Normal priority, and
+    /// Normal I/O priority. Only touches PIDs this instance actually modified.
+    /// Does NOT clear internal tracking state; call <see cref="ClearState"/> after.
     /// </summary>
     public void RestoreAll()
     {
+        ResumeAllSuspended();
+
         var pidsToReset = _modifiedPids.Keys.ToList();
 
         Parallel.ForEach(pidsToReset, pid =>
         {
             if (pid == Environment.ProcessId) return;
+            ProcessControl.SetIoPriorityNormal(pid);
             using var p = SafeGetProcess(pid);
             if (p is null) return;
             try
@@ -460,6 +529,8 @@ public class ProcessManager : IDisposable
 
     public void Dispose()
     {
+        // Backstop: never leave a process frozen because the app shut down
+        ResumeAllSuspended();
         _startWatcher?.Stop();
         _startWatcher?.Dispose();
         _stopWatcher?.Stop();

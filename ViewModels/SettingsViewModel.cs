@@ -32,9 +32,11 @@ public partial class SettingsViewModel : ObservableObject
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
     public ObservableCollection<GameProfile> GameProfiles { get; } = [];
+    public ObservableCollection<SuspendApp> SuspendApps { get; } = [];
 
     [ObservableProperty] public partial string NewGamePath { get; set; } = "";
     [ObservableProperty] public partial string NewThrottledProc { get; set; } = "";
+    [ObservableProperty] public partial string NewSuspendApp { get; set; } = "";
 
     // ── Per-game profile add form ──────────────────────────────
     public string[] PriorityOptions { get; } = ["Normal", "AboveNormal", "High"];
@@ -98,6 +100,20 @@ public partial class SettingsViewModel : ObservableObject
     public void RemoveProfile(GameProfile profile) => GameProfiles.Remove(profile);
 
     [RelayCommand]
+    private void AddSuspendApp()
+    {
+        var name = NewSuspendApp.Trim()
+            .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
+        if (name.Length == 0) return;
+        if (SuspendApps.Any(a => a.ProcessName == name)) return;
+        SuspendApps.Add(new SuspendApp { ProcessName = name, Enabled = true });
+        NewSuspendApp = "";
+    }
+
+    public void RemoveSuspendApp(SuspendApp app) => SuspendApps.Remove(app);
+
+    [RelayCommand]
     private void Save()
     {
         try
@@ -114,6 +130,7 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.GamePaths = [.. GamePaths];
             _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
             _cfg.GameProfiles = [.. GameProfiles];
+            _cfg.SuspendDuringGame = [.. SuspendApps];
             _cfg.StartMinimized = StartMinimized;
             _cfg.StartWithWindows = StartWithWindows;
             _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
@@ -164,6 +181,8 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var p in _cfg.ExtraThrottledProcs) ExtraThrottledProcs.Add(p);
         GameProfiles.Clear();
         foreach (var p in _cfg.GameProfiles) GameProfiles.Add(p);
+        SuspendApps.Clear();
+        foreach (var a in _cfg.SuspendDuringGame) SuspendApps.Add(a);
         StartMinimized = _cfg.StartMinimized;
         StartWithWindows = _cfg.StartWithWindows;
         AutoFlushStandby = _cfg.AutoFlushStandbyOnGameStart;

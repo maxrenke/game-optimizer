@@ -34,6 +34,12 @@ public sealed partial class SettingsPage : Page
             ViewModel.RemoveThrottledProcCommand.Execute(proc);
     }
 
+    private void RemoveSuspendApp_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: SuspendApp app })
+            ViewModel.RemoveSuspendApp(app);
+    }
+
     private void SaveBackBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         ViewModel.SaveCommand.Execute(null);

@@ -285,4 +285,55 @@ public class OptimizerConfigTests
         cfg.Validate();
         Assert.Equal("High", cfg.GameProfiles[0].Priority);
     }
+
+    // ── Suspend-during-game list ─────────────────────────────────────────────
+
+    [Fact]
+    public void DefaultConfig_SuspendDuringGame_IncludesOneDrive()
+    {
+        var cfg = new OptimizerConfig();
+        Assert.Contains(cfg.SuspendDuringGame, a => a.ProcessName == "onedrive" && a.Enabled);
+    }
+
+    [Fact]
+    public void Validate_SuspendApp_NameNormalized()
+    {
+        var cfg = new OptimizerConfig
+        {
+            SuspendDuringGame = [new SuspendApp { ProcessName = "  OneDrive.EXE " }],
+        };
+        cfg.Validate();
+        Assert.Equal("onedrive", cfg.SuspendDuringGame[0].ProcessName);
+    }
+
+    [Fact]
+    public void Validate_SuspendApp_BlankNameDropped()
+    {
+        var cfg = new OptimizerConfig
+        {
+            SuspendDuringGame =
+            [
+                new SuspendApp { ProcessName = "  " },
+                new SuspendApp { ProcessName = "dropbox" },
+            ],
+        };
+        cfg.Validate();
+        Assert.Single(cfg.SuspendDuringGame);
+        Assert.Equal("dropbox", cfg.SuspendDuringGame[0].ProcessName);
+    }
+
+    [Fact]
+    public void SuspendApp_RoundTripsThroughJson_WithEnabledFlag()
+    {
+        var cfg = new OptimizerConfig
+        {
+            SuspendDuringGame = [new SuspendApp { ProcessName = "dropbox", Enabled = false }],
+        };
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.Single(loaded.SuspendDuringGame);
+        Assert.Equal("dropbox", loaded.SuspendDuringGame[0].ProcessName);
+        Assert.False(loaded.SuspendDuringGame[0].Enabled);
+    }
 }

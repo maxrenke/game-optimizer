@@ -201,6 +201,48 @@
                 </StackPanel>
             </Expander>
 
+            <!-- Pause Apps During Gameplay -->
+            <Expander Header="Pause Apps During Gameplay" IsExpanded="False">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                        These apps are fully suspended (frozen) while a game is running and
+                        resumed when it closes - cloud-sync clients like OneDrive are the main
+                        cause of mid-game disk stutter. Uncheck an entry to keep it in the list
+                        without suspending it. Requires CPU pinning to be on.
+                    </TextBlock>
+                    <ListView ItemsSource="{x:Bind ViewModel.SuspendApps}" SelectionMode="None"
+                              MaxHeight="160">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="services:SuspendApp">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Content="{x:Bind ProcessName}"
+                                              IsChecked="{x:Bind Enabled, Mode=TwoWay}"
+                                              FontFamily="Consolas" FontSize="12" />
+                                    <Button Grid.Column="1" Content="&#xE74D;"
+                                            FontFamily="Segoe Fluent Icons" FontSize="12"
+                                            Click="RemoveSuspendApp_Click" Tag="{x:Bind}"
+                                            Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox PlaceholderText="process name (no .exe)"
+                                 Text="{x:Bind ViewModel.NewSuspendApp, Mode=TwoWay}" />
+                        <Button Grid.Column="1" Content="Add"
+                                Command="{x:Bind ViewModel.AddSuspendAppCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Expander>
+
             <!-- Save / Back buttons -->
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Save Settings" Command="{x:Bind ViewModel.SaveCommand}"

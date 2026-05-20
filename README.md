@@ -17,7 +17,8 @@ When a game starts, Gaming Optimizer instantly:
 
 - **Pins the game** to your fastest CPU cores (P-cores on Intel hybrid, all cores on AMD) at High priority
 - **Isolates Firefox and VLC** to dedicated cores so they never steal game CPU time
-- **Demotes background processes** (OneDrive, iCloud, MalwareBytes, etc.) to BelowNormal priority on the remaining cores
+- **Demotes background processes** (OneDrive, iCloud, MalwareBytes, etc.) to BelowNormal CPU priority and lowest disk I/O priority on the remaining cores
+- **Suspends cloud-sync apps** (OneDrive, Dropbox, Google Drive by default) for the duration of the session, so they cannot cause mid-game disk stutter - resumed automatically when the game closes
 - **Sets timer resolution to 1ms** via `timeBeginPeriod` so OS scheduling jitter drops from ~15ms to ~1ms
 - **Tweaks Win32PrioritySeparation** to short fixed quanta, eliminating the foreground boost penalty
 - **Suspends SysMain (Superfetch)** - pointless on NVMe, actively harmful under memory pressure
@@ -58,6 +59,7 @@ When the game closes, all processes are restored to their original affinities an
 ### Settings
 - Configurable affinity masks (hex), alert thresholds, game paths, extra throttled processes
 - **Per-game profiles** - override CPU affinity and priority for specific games by process name; games with no profile use the global game mask at High priority
+- **Pause Apps During Gameplay** - editable list of apps to fully suspend while a game runs (OneDrive/Dropbox/Google Drive by default); per-entry enable checkbox
 - Start minimized / Start with Windows (creates a scheduled task at HIGHEST privilege)
 - Auto-detects NIC if the configured one is missing
 - **Reset All Process State** (Danger Zone) - immediately restores every process affinity and priority to Windows defaults, re-enables SysMain, and clears all internal pinning state. Useful if the app left processes in a bad state after a crash.
@@ -72,6 +74,8 @@ GameOptimizer/
 - Services/
   - OptimizerService.cs      # Orchestrator: 1s scan tick + 3s heavy tick + ResetAll
   - ProcessManager.cs        # Affinity/priority + WMI event watchers; all ops gated on PinningEnabled
+  - ProcessControl.cs        # Suspend/resume + I/O priority P/Invoke (ntdll)
+  - SuspendApp.cs            # Config entry for an app to freeze during gameplay
   - CpuMonitor.cs            # PDH API per-core sampling (~5ms, persistent query)
   - GpuMonitor.cs            # nvidia-smi -> rocm-smi -> WDDM WMI fallback
   - NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer (300 samples / 5 min)
