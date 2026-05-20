@@ -81,10 +81,12 @@ public class SessionTracker
 
         Directory.CreateDirectory(ReportDir);
 
-        // Prune reports older than 30 days
+        // Prune reports older than 30 days (the cumulative .csv is never pruned)
         foreach (var f in Directory.GetFiles(ReportDir, "*.txt"))
             if (File.GetLastWriteTime(f) < DateTime.Now.AddDays(-30))
                 try { File.Delete(f); } catch { }
+
+        if (_sessions.Count > 0) AppendCsv();
 
         var dt = DateTime.Now;
         var file = Path.Combine(ReportDir, $"session_{dt:yyyy-MM-dd_HHmm}.txt");
@@ -120,15 +122,7 @@ public class SessionTracker
                     var pCpu = (int)Math.Round(g.BtCpuTicks * 100.0 / btTotal);
                     var pBal = (int)Math.Round(g.BtBalTicks * 100.0 / btTotal);
                     var pHr  = (int)Math.Round(g.BtHrTicks  * 100.0 / btTotal);
-                    // Find the actual dominant state by raw tick count (not rounded %)
-                    // to avoid ties when all round to 0 in short sessions.
-                    var dom = new[] {
-                        (g.BtGpuTicks, "GPU-bound"),
-                        (g.BtCpuTicks, "CPU-bound"),
-                        (g.BtBalTicks, "Balanced"),
-                        (g.BtHrTicks,  "Headroom")
-                    }.MaxBy(x => x.Item1).Item2;
-                    lines.Add($"  Bottleneck: {dom} most of session");
+                    lines.Add($"  Bottleneck: {DominantBottleneck(g)} most of session");
                     lines.Add($"    GPU {pGpu,4}%  CPU {pCpu,4}%  Balanced {pBal,4}%  Headroom {pHr,4}%");
                 }
             }
@@ -137,4 +131,65 @@ public class SessionTracker
         File.WriteAllLines(file, lines);
         return file;
     }
+
+    /// <summary>
+    /// Path to the cumulative machine-readable session log. One row per game
+    /// session, appended across every app run - intended for trend tracking.
+    /// </summary>
+    public static string CsvPath => Path.Combine(ReportDir, "sessions.csv");
+
+    public const string CsvHeaderLine =
+        "Date,Game,StartTime,DurationSec,AvgCpuPct,PeakCpuPct,AvgGpuPct," +
+        "PeakGpuPct,PeakTempC,PeakVramPct,Bottleneck," +
+        "GpuTickPct,CpuTickPct,BalancedTickPct,HeadroomTickPct";
+
+    /// <summary>Builds one CSV data row per recorded session (no header).</summary>
+    public IReadOnlyList<string> BuildCsvRows()
+    {
+        var rows = new List<string>();
+        foreach (var g in _sessions)
+        {
+            var btTotal = g.BtCpuTicks + g.BtGpuTicks + g.BtBalTicks + g.BtHrTicks;
+            int Pct(int t) => btTotal > 0 ? (int)Math.Round(t * 100.0 / btTotal) : 0;
+            rows.Add(string.Join(",",
+                g.StartTime.ToString("yyyy-MM-dd"),
+                CsvField(g.Name),
+                g.StartTime.ToString("HH:mm:ss"),
+                (int)g.Duration.TotalSeconds,
+                g.AvgCpu, g.PeakCpu, g.AvgGpu, g.PeakGpu,
+                g.PeakTempC, g.PeakVramPct,
+                DominantBottleneck(g),
+                Pct(g.BtGpuTicks), Pct(g.BtCpuTicks),
+                Pct(g.BtBalTicks), Pct(g.BtHrTicks)));
+        }
+        return rows;
+    }
+
+    private void AppendCsv()
+    {
+        try
+        {
+            var lines = new List<string>();
+            if (!File.Exists(CsvPath)) lines.Add(CsvHeaderLine);
+            lines.AddRange(BuildCsvRows());
+            File.AppendAllLines(CsvPath, lines);
+        }
+        catch { }
+    }
+
+    // Quote a CSV field only if it contains a comma, quote, or newline.
+    private static string CsvField(string s) =>
+        s.Contains(',') || s.Contains('"') || s.Contains('\n')
+            ? $"\"{s.Replace("\"", "\"\"")}\""
+            : s;
+
+    // Dominant bottleneck by raw tick count (not rounded %), so short
+    // sessions where every % rounds to 0 still resolve to a real winner.
+    private static string DominantBottleneck(GameSession g) =>
+        new[] {
+            (g.BtGpuTicks, "GPU-bound"),
+            (g.BtCpuTicks, "CPU-bound"),
+            (g.BtBalTicks, "Balanced"),
+            (g.BtHrTicks,  "Headroom")
+        }.MaxBy(x => x.Item1).Item2;
 }

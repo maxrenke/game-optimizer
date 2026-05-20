@@ -172,4 +172,86 @@ public class SessionTrackerTests
         }
         finally { try { File.Delete(file); } catch { } }
     }
+
+    // ── CSV export ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildCsvRows_NoSessions_ReturnsEmpty()
+    {
+        var t = new SessionTracker();
+        Assert.Empty(t.BuildCsvRows());
+    }
+
+    [Fact]
+    public void BuildCsvRows_OneRowPerSession()
+    {
+        var t = new SessionTracker();
+        t.StartSession("Game1");
+        t.Update(60, null, BottleneckState.Cpu);
+        t.EndSession();
+        t.StartSession("Game2");
+        t.Update(80, null, BottleneckState.Gpu);
+        t.EndSession();
+        Assert.Equal(2, t.BuildCsvRows().Count);
+    }
+
+    [Fact]
+    public void BuildCsvRows_ColumnCountMatchesHeader()
+    {
+        var t = new SessionTracker();
+        t.StartSession("TestGame");
+        t.Update(50, new GpuData("NVIDIA", 70, 60, 0, 2048, 8192, 0, 0, 0, 0),
+                 BottleneckState.Balanced);
+        t.EndSession();
+
+        var headerCols = SessionTracker.CsvHeaderLine.Split(',').Length;
+        var rowCols = t.BuildCsvRows()[0].Split(',').Length;
+        Assert.Equal(headerCols, rowCols);
+    }
+
+    [Fact]
+    public void BuildCsvRows_ContainsSessionData()
+    {
+        var t = new SessionTracker();
+        t.StartSession("Hellforged");
+        t.Update(40, null, BottleneckState.Balanced);
+        t.Update(90, null, BottleneckState.Balanced);
+        t.EndSession();
+
+        var row = t.BuildCsvRows()[0];
+        Assert.Contains("Hellforged", row);
+        Assert.Contains("Balanced", row);   // dominant bottleneck
+        Assert.Contains("90", row);          // peak CPU
+    }
+
+    [Fact]
+    public void BuildCsvRows_QuotesGameNameContainingComma()
+    {
+        var t = new SessionTracker();
+        t.StartSession("Sid Meier's Civilization, VI");
+        t.Update(50, null, BottleneckState.Headroom);
+        t.EndSession();
+
+        var row = t.BuildCsvRows()[0];
+        Assert.Contains("\"Sid Meier's Civilization, VI\"", row);
+        // The quoted field must not inflate the column count
+        Assert.Equal(SessionTracker.CsvHeaderLine.Split(',').Length,
+                     SplitCsv(row).Count);
+    }
+
+    // Minimal RFC-4180 CSV splitter for verifying quoted fields in tests.
+    private static List<string> SplitCsv(string line)
+    {
+        var fields = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        foreach (var c in line)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes) { fields.Add(sb.ToString()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        fields.Add(sb.ToString());
+        return fields;
+    }
 }

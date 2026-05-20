@@ -53,6 +53,7 @@ When the game closes, all processes are restored to their original affinities an
 - Per-game session tracking: avg/peak CPU%, avg/peak GPU%, peak VRAM%, peak temp
 - Bottleneck breakdown: % of session spent CPU-bound / GPU-bound / balanced
 - Auto-saved to `Documents\GamingOptimizer\` as plain text; pruned after 30 days
+- Cumulative `sessions.csv` (one row per game session, never pruned) for spreadsheet trend tracking
 
 ### Settings
 - Configurable affinity masks (hex), alert thresholds, game paths, extra throttled processes
