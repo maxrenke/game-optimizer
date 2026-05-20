@@ -26,6 +26,9 @@ public class TrayService : IDisposable
     }
 
     private TaskbarIcon? _icon;
+    // Held in a field: a DispatcherQueueTimer with no live reference is
+    // garbage-collected and silently stops ticking.
+    private DispatcherQueueTimer? _timer;
     private readonly DispatcherQueue _dispatcher;
 
     public bool PinEnabled { get; set; } = true;
@@ -98,9 +101,9 @@ public class TrayService : IDisposable
             _icon.ContextFlyout = menu;
             _icon.DoubleClickCommand = new RelayCommand(() => ToggleWindowRequested?.Invoke());
 
-            var timer = _dispatcher.CreateTimer();
-            timer.Interval = TimeSpan.FromSeconds(1);
-            timer.Tick += (_, _) =>
+            _timer = _dispatcher.CreateTimer();
+            _timer.Interval = TimeSpan.FromSeconds(1);
+            _timer.Tick += (_, _) =>
             {
                 var pin = PinEnabled ? "PIN ON" : "PIN OFF";
                 var gpuPart = GpuAvailable ? $" | GPU {GpuUtil}% {GpuTempC}C" : "";
@@ -118,7 +121,7 @@ public class TrayService : IDisposable
                     _pendingBalloon = null;
                 }
             };
-            timer.Start();
+            _timer.Start();
 
             _icon.ForceCreate(false);
 
@@ -138,6 +141,8 @@ public class TrayService : IDisposable
     {
         _dispatcher.TryEnqueue(() =>
         {
+            _timer?.Stop();
+            _timer = null;
             _icon?.Dispose();
             _icon = null;
         });
