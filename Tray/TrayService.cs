@@ -49,17 +49,32 @@ public class TrayService : IDisposable
                 ToolTipText = "Gaming Optimizer - Idle",
             };
 
-            var pinItem = new MenuFlyoutItem { Text = "CPU Pinning: ON" };
-            pinItem.Click += (_, _) => TogglePinRequested?.Invoke();
+            // The tray menu renders as a native Win32 popup, which invokes each
+            // item's Command - Click events are never raised because the items
+            // are not in a live XAML visual tree. All items must use Command.
+            var pinItem = new MenuFlyoutItem
+            {
+                Text = "CPU Pinning: ON",
+                Command = new RelayCommand(() => TogglePinRequested?.Invoke()),
+            };
 
-            var statusItem = new MenuFlyoutItem { Text = "Show Status" };
-            statusItem.Click += (_, _) => ShowStatusRequested?.Invoke();
+            var statusItem = new MenuFlyoutItem
+            {
+                Text = "Show Status",
+                Command = new RelayCommand(() => ShowStatusRequested?.Invoke()),
+            };
 
-            var windowItem = new MenuFlyoutItem { Text = "Hide to Tray" };
-            windowItem.Click += (_, _) => ToggleWindowRequested?.Invoke();
+            var windowItem = new MenuFlyoutItem
+            {
+                Text = "Show Window",
+                Command = new RelayCommand(() => ToggleWindowRequested?.Invoke()),
+            };
 
-            var exitItem = new MenuFlyoutItem { Text = "Exit" };
-            exitItem.Click += (_, _) => ExitRequested?.Invoke();
+            var exitItem = new MenuFlyoutItem
+            {
+                Text = "Exit",
+                Command = new RelayCommand(() => ExitRequested?.Invoke()),
+            };
 
             var menu = new MenuFlyout();
             menu.Items.Add(pinItem);
