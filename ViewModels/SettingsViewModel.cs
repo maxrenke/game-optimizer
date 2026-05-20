@@ -29,6 +29,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool StartMinimized { get; set; } = false;
     [ObservableProperty] public partial bool StartWithWindows { get; set; } = false;
     [ObservableProperty] public partial bool AutoFlushStandby { get; set; } = false;
+    [ObservableProperty] public partial bool DisableGameDvr { get; set; } = true;
 
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
@@ -136,6 +137,7 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.StartMinimized = StartMinimized;
             _cfg.StartWithWindows = StartWithWindows;
             _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
+            _cfg.DisableGameDvrWhenPinning = DisableGameDvr;
             _cfg.Save();
             ApplyStartWithWindows(StartWithWindows);
         }
@@ -189,5 +191,6 @@ public partial class SettingsViewModel : ObservableObject
         StartMinimized = _cfg.StartMinimized;
         StartWithWindows = _cfg.StartWithWindows;
         AutoFlushStandby = _cfg.AutoFlushStandbyOnGameStart;
+        DisableGameDvr = _cfg.DisableGameDvrWhenPinning;
     }
 }

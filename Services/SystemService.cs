@@ -15,9 +15,19 @@ public class SystemService
     private const string PrioValue = "Win32PrioritySeparation";
     private const int GamingPrio = 26;
 
+    // Game DVR / background capture - HKCU values that gate Xbox capture
+    private const string DvrKey      = @"System\GameConfigStore";
+    private const string DvrValue    = "GameDVR_Enabled";
+    private const string CaptureKey  = @"Software\Microsoft\Windows\CurrentVersion\GameDVR";
+    private const string CaptureVal  = "AppCaptureEnabled";
+
     private int? _originalPrio;
     private ServiceStartMode? _sysMainOriginalStart;
     private bool _sysMainStopped;
+
+    private int? _origDvr;
+    private int? _origCapture;
+    private bool _gameDvrDisabled;
 
     public event Action<string>? LogEntry;
 
@@ -85,6 +95,66 @@ public class SystemService
             }
             catch { }
         }
+
+        // Always undo a Game DVR change on teardown/reset (no-op if not set)
+        RestoreGameDvr();
+    }
+
+    /// <summary>
+    /// Disables Windows Game DVR and Xbox background capture - their
+    /// always-on recording costs CPU/GPU during gameplay. Originals are saved
+    /// for <see cref="RestoreGameDvr"/>. Idempotent.
+    /// </summary>
+    public void DisableGameDvr()
+    {
+        if (_gameDvrDisabled) return;
+        try
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(DvrKey))
+            {
+                _origDvr = (int?)k?.GetValue(DvrValue);
+                k?.SetValue(DvrValue, 0, RegistryValueKind.DWord);
+            }
+            using (var k = Registry.CurrentUser.CreateSubKey(CaptureKey))
+            {
+                _origCapture = (int?)k?.GetValue(CaptureVal);
+                k?.SetValue(CaptureVal, 0, RegistryValueKind.DWord);
+            }
+            _gameDvrDisabled = true;
+            LogEntry?.Invoke("[SYS] Game DVR / background capture disabled");
+        }
+        catch { LogEntry?.Invoke("[SYS] Game DVR disable failed"); }
+    }
+
+    /// <summary>
+    /// Restores Game DVR / capture to the values saved by
+    /// <see cref="DisableGameDvr"/>. Idempotent - a no-op if never disabled.
+    /// </summary>
+    public void RestoreGameDvr()
+    {
+        if (!_gameDvrDisabled) return;
+        try
+        {
+            using (var k = Registry.CurrentUser.OpenSubKey(DvrKey, writable: true))
+            {
+                if (k is not null)
+                {
+                    if (_origDvr.HasValue) k.SetValue(DvrValue, _origDvr.Value, RegistryValueKind.DWord);
+                    else k.DeleteValue(DvrValue, throwOnMissingValue: false);
+                }
+            }
+            using (var k = Registry.CurrentUser.OpenSubKey(CaptureKey, writable: true))
+            {
+                if (k is not null)
+                {
+                    if (_origCapture.HasValue) k.SetValue(CaptureVal, _origCapture.Value, RegistryValueKind.DWord);
+                    else k.DeleteValue(CaptureVal, throwOnMissingValue: false);
+                }
+            }
+            _gameDvrDisabled = false;
+            LogEntry?.Invoke("[SYS] Game DVR / background capture restored");
+        }
+        catch { }
     }
 
     // Check if PrioritySep is stuck at 26 from a crash and reset it

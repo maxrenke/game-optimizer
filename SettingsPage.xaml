@@ -39,6 +39,10 @@
                                   IsOn="{x:Bind ViewModel.AutoFlushStandby, Mode=TwoWay}" />
                     <TextBlock Text="Purges the Windows standby memory list so a game starts with more free RAM."
                                FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                    <ToggleSwitch Header="Disable Game DVR / background capture while pinning"
+                                  IsOn="{x:Bind ViewModel.DisableGameDvr, Mode=TwoWay}" />
+                    <TextBlock Text="Disables Xbox background recording (GameDVR_Enabled, AppCaptureEnabled) while CPU pinning is active. Restored when pinning is turned off."
+                               FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
                 </StackPanel>
             </Expander>
 

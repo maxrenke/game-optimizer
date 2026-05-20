@@ -66,8 +66,16 @@ public class OptimizerService : IDisposable
         set
         {
             _pm.PinningEnabled = value;
-            if (value) _pm.RestorePinning();
-            else _pm.ReleasePinning();
+            if (value)
+            {
+                _pm.RestorePinning();
+                if (_cfg.DisableGameDvrWhenPinning) _sys.DisableGameDvr();
+            }
+            else
+            {
+                _pm.ReleasePinning();
+                _sys.RestoreGameDvr();   // idempotent - no-op if it was never disabled
+            }
         }
     }
 

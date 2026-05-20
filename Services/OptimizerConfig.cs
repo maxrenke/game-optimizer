@@ -57,6 +57,9 @@ public class OptimizerConfig
     /// <summary>Purge the Windows standby memory list each time a game is detected.</summary>
     public bool AutoFlushStandbyOnGameStart { get; set; } = false;
 
+    /// <summary>Disable Windows Game DVR / Xbox background capture while CPU pinning is on.</summary>
+    public bool DisableGameDvrWhenPinning { get; set; } = true;
+
     [JsonIgnore]
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
