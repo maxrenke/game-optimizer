@@ -126,7 +126,7 @@ GameOptimizer/
 | GPU sampling | nvidia-smi CLI / rocm-smi CLI / WDDM WMI |
 | Process events | WMI Win32_ProcessStartTrace |
 | Timer resolution | winmm.dll timeBeginPeriod |
-| Affinity | kernel32.dll SetProcessAffinityMask |
+| Affinity | System.Diagnostics.Process.ProcessorAffinity |
 | Tray icon | user32.dll LoadImage (real Win32 HICON) |
 | Tests | xUnit 2.9 / 106 tests |
 | CI | GitHub Actions (windows-latest) |

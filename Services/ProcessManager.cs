@@ -1,15 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Management;
-using System.Runtime.InteropServices;
 
 namespace GameOptimizer.Services;
 
 public class ProcessManager : IDisposable
 {
-    [DllImport("kernel32.dll")]
-    private static extern bool SetProcessAffinityMask(IntPtr hProcess, IntPtr dwProcessAffinityMask);
-
     private static readonly HashSet<string> NotAGame = new(StringComparer.OrdinalIgnoreCase)
     {
         "steam","steamwebhelper","steamservice","gameoverlayui",
@@ -101,7 +97,7 @@ public class ProcessManager : IDisposable
             {
                 if (PinningEnabled)
                 {
-                    var proc = SafeGetProcess(pid);
+                    using var proc = SafeGetProcess(pid);
                     if (proc is not null && !_appliedMediaZone.ContainsKey(pid))
                     {
                         ApplyMediaZone(proc);
@@ -117,7 +113,7 @@ public class ProcessManager : IDisposable
             {
                 if (PinningEnabled)
                 {
-                    var proc = SafeGetProcess(pid);
+                    using var proc = SafeGetProcess(pid);
                     if (proc is not null)
                     {
                         try
@@ -159,17 +155,20 @@ public class ProcessManager : IDisposable
         var newGames = new List<string>();
         foreach (var proc in SafeGetProcesses())
         {
-            if (ActiveGames.ContainsKey(proc.Id)) continue;
-            if (IsExcluded(proc.ProcessName)) continue;
-            var path = GetProcPath(proc);
-            if (IsGamePath(path))
+            using (proc)
             {
-                if (ApplyGame(proc))
+                if (ActiveGames.ContainsKey(proc.Id)) continue;
+                if (IsExcluded(proc.ProcessName)) continue;
+                var path = GetProcPath(proc);
+                if (IsGamePath(path))
                 {
-                    ActiveGames[proc.Id] = proc.ProcessName;
-                    _modifiedPids[proc.Id] = 0;
-                    newGames.Add(proc.ProcessName);
-                    LogEntry?.Invoke($"[GAME] Detected: {proc.ProcessName} (PID {proc.Id})");
+                    if (ApplyGame(proc))
+                    {
+                        ActiveGames[proc.Id] = proc.ProcessName;
+                        _modifiedPids[proc.Id] = 0;
+                        newGames.Add(proc.ProcessName);
+                        LogEntry?.Invoke($"[GAME] Detected: {proc.ProcessName} (PID {proc.Id})");
+                    }
                 }
             }
         }
@@ -179,7 +178,7 @@ public class ProcessManager : IDisposable
         {
             foreach (var pid in ActiveGames.Keys.ToList())
             {
-                var p = SafeGetProcess(pid);
+                using var p = SafeGetProcess(pid);
                 if (p is not null && p.ProcessorAffinity.ToInt64() != _cfg.GameAffinityMask)
                     try { p.ProcessorAffinity = GameAffinity; } catch { }
             }
@@ -188,7 +187,8 @@ public class ProcessManager : IDisposable
         // Detect exited games (fallback for when WMI stop event is missed)
         foreach (var pid in ActiveGames.Keys.ToList())
         {
-            if (SafeGetProcess(pid) is null)
+            using var p = SafeGetProcess(pid);
+            if (p is null)
             {
                 if (ActiveGames.TryRemove(pid, out var exitedName))
                     LogEntry?.Invoke($"[ENDED] {exitedName} closed (PID {pid})");
@@ -201,21 +201,21 @@ public class ProcessManager : IDisposable
             foreach (var proc in SafeGetProcessesByName("firefox")
                 .Concat(SafeGetProcessesByName("vlc")))
             {
-                if (!_appliedMediaZone.ContainsKey(proc.Id))
+                using (proc)
                 {
-                    ApplyMediaZone(proc);
-                    _appliedMediaZone[proc.Id] = proc.ProcessName;
-                    LogEntry?.Invoke($"[MEDIA] Pinned {proc.ProcessName} (PID {proc.Id}) to media zone");
+                    if (!_appliedMediaZone.ContainsKey(proc.Id))
+                    {
+                        ApplyMediaZone(proc);
+                        _appliedMediaZone[proc.Id] = proc.ProcessName;
+                        LogEntry?.Invoke($"[MEDIA] Pinned {proc.ProcessName} (PID {proc.Id}) to media zone");
+                    }
                 }
             }
         }
 
-        foreach (var pid in _appliedMediaZone.Keys.ToList())
-            if (SafeGetProcess(pid) is null) _appliedMediaZone.TryRemove(pid, out _);
-        foreach (var pid in _appliedBgProcs.Keys.ToList())
-            if (SafeGetProcess(pid) is null) _appliedBgProcs.TryRemove(pid, out _);
-        foreach (var pid in _pathFailCache.Keys.ToList())
-            if (SafeGetProcess(pid) is null) _pathFailCache.TryRemove(pid, out _);
+        PruneDeadPids(_appliedMediaZone);
+        PruneDeadPids(_appliedBgProcs);
+        PruneDeadPids(_pathFailCache);
 
         return newGames;
     }
@@ -234,16 +234,29 @@ public class ProcessManager : IDisposable
         {
             foreach (var proc in SafeGetProcessesByName(name))
             {
-                try
+                using (proc)
                 {
-                    proc.PriorityClass = ProcessPriorityClass.BelowNormal;
-                    proc.ProcessorAffinity = BgAffinity;
-                    _modifiedPids[proc.Id] = 0;
-                    _appliedBgProcs[proc.Id] = proc.ProcessName;
+                    try
+                    {
+                        proc.PriorityClass = ProcessPriorityClass.BelowNormal;
+                        proc.ProcessorAffinity = BgAffinity;
+                        _modifiedPids[proc.Id] = 0;
+                        _appliedBgProcs[proc.Id] = proc.ProcessName;
+                    }
+                    catch { }
                 }
-                catch { }
             }
         });
+    }
+
+    // Remove tracking entries for PIDs that no longer exist
+    private static void PruneDeadPids<T>(ConcurrentDictionary<int, T> dict)
+    {
+        foreach (var pid in dict.Keys.ToList())
+        {
+            using var p = SafeGetProcess(pid);
+            if (p is null) dict.TryRemove(pid, out _);
+        }
     }
 
     public void ReleasePinning()
@@ -253,7 +266,7 @@ public class ProcessManager : IDisposable
 
         Parallel.ForEach(pidsToReset, pid =>
         {
-            var p = SafeGetProcess(pid);
+            using var p = SafeGetProcess(pid);
             if (p is null) return;
             try
             {
@@ -272,20 +285,23 @@ public class ProcessManager : IDisposable
     {
         foreach (var pid in ActiveGames.Keys)
         {
-            var p = SafeGetProcess(pid);
+            using var p = SafeGetProcess(pid);
             if (p is null) continue;
             try { p.ProcessorAffinity = GameAffinity; p.PriorityClass = ProcessPriorityClass.High; } catch { }
         }
         foreach (var proc in SafeGetProcessesByName("firefox").Concat(SafeGetProcessesByName("vlc")))
         {
-            try
+            using (proc)
             {
-                proc.ProcessorAffinity = FirefoxAffinity;
-                proc.PriorityClass = ProcessPriorityClass.Normal;
-                _appliedMediaZone[proc.Id] = proc.ProcessName;
-                _modifiedPids[proc.Id] = 0;
+                try
+                {
+                    proc.ProcessorAffinity = FirefoxAffinity;
+                    proc.PriorityClass = ProcessPriorityClass.Normal;
+                    _appliedMediaZone[proc.Id] = proc.ProcessName;
+                    _modifiedPids[proc.Id] = 0;
+                }
+                catch { }
             }
-            catch { }
         }
         ThrottleBg();
         LogEntry?.Invoke("[PIN] CPU pinning ENABLED - affinities restored");
@@ -317,7 +333,7 @@ public class ProcessManager : IDisposable
         Parallel.ForEach(pidsToReset, pid =>
         {
             if (pid == Environment.ProcessId) return;
-            var p = SafeGetProcess(pid);
+            using var p = SafeGetProcess(pid);
             if (p is null) return;
             try
             {
