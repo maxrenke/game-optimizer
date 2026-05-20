@@ -195,6 +195,90 @@ GameOptimizer/
 
 ---
 
+## Tools
+
+Three PowerShell scripts live in `Tools/` for setup and debugging. All require an elevated terminal.
+
+### `Install-Shortcuts.ps1` - Desktop shortcut setup
+
+Run once after cloning. Creates three desktop shortcuts:
+
+- **GameOptimizer** - launches the app elevated with no UAC prompt, via a `RunLevel=Highest` scheduled task it registers
+- **Affinity Watcher** - opens `Watch-Affinity.ps1` in your default terminal
+- **Reset Optimizer** - opens `Reset-Optimizer.ps1` and keeps the window open
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Install-Shortcuts.ps1
+```
+
+Re-run after moving the repo or switching build configurations - it auto-detects the newest build under `bin\`.
+
+---
+
+### `Watch-Affinity.ps1` - Live CPU affinity/priority watcher
+
+A full-screen TUI that shows every affinity and priority change on the system in real time, annotated with the Gaming Optimizer zone that owns each core range. Useful for verifying exactly what the app is doing (or not doing) to your processes.
+
+```
+  CPU AFFINITY MONITOR                            elapsed 00:02:14
+  16 cores   ALL = 0xFFFF [ALL]
+  --------------------------------------------------------------------------
+  SUMMARY
+    pinned events 12     restored events 8      priority changes 5
+    currently modified 4   of which pinned 4
+
+  CORE    0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+  PROC    1  1  1  1  1  1  1  1  1  1  1  1  0  0  0  0
+
+  CURRENTLY MODIFIED   (4)
+  NAME                   PID     AFFINITY                PRIORITY      ZONE
+  eldenring              18432   0x0FFF [0-11]            High          GAME
+  firefox                9104    0x3000 [12-13]           Normal        MEDIA
+  onedrive               4280    0xC000 [14-15]           BelowNormal   BG
+  googledrivefs          7392    0xC000 [14-15]           BelowNormal   BG
+
+  RECENT EVENTS
+  [14:32:01] PINNED   eldenring              PID 18432  0xFFFF -> 0x0FFF [0-11]  (GAME)
+  [14:32:01] PINNED   firefox                PID 9104   0xFFFF -> 0x3000 [12-13] (MEDIA)
+```
+
+Reads affinity zone boundaries from `config.json` so the GAME / MEDIA / BG labels match your actual configuration. Every event is written to a timestamped log in `Documents\GamingOptimizer\`. Stop with Ctrl+C for a session summary.
+
+```powershell
+# Watch everything
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Watch-Affinity.ps1
+
+# Filter to a specific process name
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Watch-Affinity.ps1 -Name firefox
+
+# Faster refresh, no log file
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Watch-Affinity.ps1 -IntervalSeconds 0.5 -NoLog
+```
+
+---
+
+### `Reset-Optimizer.ps1` - Emergency standalone reset
+
+Restores all process and system state to Windows defaults without requiring the app to be running. Use this if the app crashed and left processes pinned, or between test runs when you want a guaranteed clean slate.
+
+What it resets:
+
+1. `Win32PrioritySeparation` registry value back to `2` (Windows default)
+2. SysMain service back to Automatic and started
+3. Every process with a non-default affinity mask back to all cores
+4. Every process at BelowNormal or Idle priority back to Normal
+5. Known background and cloud-sync apps (OneDrive, Dropbox, Google Drive, and anything in your `config.json`) resumed from suspension and restored to normal disk I/O priority
+
+Note: high-priority processes are intentionally not touched - many system processes (dwm, csrss, audiodg) legitimately run at High, and a game left at High after a crash is harmless and clears when the game exits.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File Tools\Reset-Optimizer.ps1
+```
+
+> If Gaming Optimizer is running with CPU pinning **on** when you run this, it will re-apply its changes within a second. Turn pinning off (or close the app) first.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
