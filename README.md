@@ -61,6 +61,7 @@ When the game closes, all processes are restored to their original affinities an
 - Start minimized / Start with Windows (creates a scheduled task at HIGHEST privilege)
 - Auto-detects NIC if the configured one is missing
 - **Reset All Process State** (Danger Zone) - immediately restores every process affinity and priority to Windows defaults, re-enables SysMain, and clears all internal pinning state. Useful if the app left processes in a bad state after a crash.
+- **Standby RAM flush** - purge the Windows standby memory list on demand (footer button) or automatically each time a game launches (Behavior setting), freeing cached pages so the game starts with more available RAM
 
 ---
 
@@ -75,6 +76,7 @@ GameOptimizer/
   - GpuMonitor.cs            # nvidia-smi -> rocm-smi -> WDDM WMI fallback
   - NetworkMonitor.cs        # NIC byte counters -> KB/s ring buffer (300 samples / 5 min)
   - SystemService.cs         # Win32PrioritySeparation, SysMain, timeBeginPeriod
+  - MemoryService.cs         # Standby memory list purge (NtSetSystemInformation)
   - SessionTracker.cs        # Per-game session stats + report generation
   - BottleneckDetector.cs    # 5-sample rolling CPU vs GPU saturation heuristic
   - AlertMonitor.cs          # Threshold-based thermal/utilization alerts

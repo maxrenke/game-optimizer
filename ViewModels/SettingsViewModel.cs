@@ -27,6 +27,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial int AlertSustainedTicks { get; set; } = 4;
     [ObservableProperty] public partial bool StartMinimized { get; set; } = false;
     [ObservableProperty] public partial bool StartWithWindows { get; set; } = false;
+    [ObservableProperty] public partial bool AutoFlushStandby { get; set; } = false;
 
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
@@ -115,6 +116,7 @@ public partial class SettingsViewModel : ObservableObject
             _cfg.GameProfiles = [.. GameProfiles];
             _cfg.StartMinimized = StartMinimized;
             _cfg.StartWithWindows = StartWithWindows;
+            _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
             _cfg.Save();
             ApplyStartWithWindows(StartWithWindows);
         }
@@ -164,5 +166,6 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var p in _cfg.GameProfiles) GameProfiles.Add(p);
         StartMinimized = _cfg.StartMinimized;
         StartWithWindows = _cfg.StartWithWindows;
+        AutoFlushStandby = _cfg.AutoFlushStandbyOnGameStart;
     }
 }

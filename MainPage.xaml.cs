@@ -188,4 +188,7 @@ public sealed partial class MainPage : Page
 
     private void ExitBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         => App.RequestExit();
+
+    private void FlushRamBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        => App.OptimizerService?.FlushStandbyRam();
 }

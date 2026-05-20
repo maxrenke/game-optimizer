@@ -40,6 +40,9 @@ public class OptimizerConfig
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;
 
+    /// <summary>Purge the Windows standby memory list each time a game is detected.</summary>
+    public bool AutoFlushStandbyOnGameStart { get; set; } = false;
+
     [JsonIgnore]
     public static string ConfigPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),

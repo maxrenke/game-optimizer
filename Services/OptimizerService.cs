@@ -145,6 +145,18 @@ public class OptimizerService : IDisposable
 
     public string SaveReport() => _sessions.SaveReport(_startTime);
 
+    /// <summary>
+    /// Purges the Windows standby memory list and logs the result. Safe to
+    /// call at any time; a no-op (logged as a failure) without admin rights.
+    /// </summary>
+    public void FlushStandbyRam()
+    {
+        var freedMb = MemoryService.FlushStandbyList();
+        AddLog(freedMb >= 0
+            ? $"[SYS] Standby RAM flushed - freed {freedMb} MB"
+            : "[SYS] Standby RAM flush failed (needs admin)");
+    }
+
     public int ReportCount()
     {
         try { return Directory.GetFiles(SessionTracker.ReportDir, "*.txt").Length; } catch { return 0; }
@@ -192,6 +204,8 @@ public class OptimizerService : IDisposable
         {
             if (_sessions.Current is null) _sessions.StartSession(g);
         }
+        if (newGames.Count > 0 && _cfg.AutoFlushStandbyOnGameStart)
+            _ = Task.Run(FlushStandbyRam);
         if (_pm.ActiveGames.Count == 0 && _sessions.Current is not null)
             _sessions.EndSession();
 

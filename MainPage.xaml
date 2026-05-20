@@ -531,6 +531,13 @@
                                FontSize="12" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
+            <Button x:Name="FlushRamBtn" Click="FlushRamBtn_Click"
+                    ToolTipService.ToolTip="Purge the Windows standby memory list now">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <FontIcon Glyph="&#xEDAD;" FontSize="13" />
+                    <TextBlock Text="Flush RAM" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
         </StackPanel>
         <Button Grid.Column="2" x:Name="ExitBtn" Click="ExitBtn_Click" Style="{StaticResource AccentButtonStyle}">
             <StackPanel Orientation="Horizontal" Spacing="5">

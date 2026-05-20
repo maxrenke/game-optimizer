@@ -131,6 +131,11 @@ public class OptimizerServiceWrapper(Services.OptimizerService inner)
         Task.Run(() => inner.ResetAll());
     }
 
+    public void FlushStandbyRam()
+    {
+        Task.Run(() => inner.FlushStandbyRam());
+    }
+
     public void Stop()
     {
         _ = inner.SaveReport();

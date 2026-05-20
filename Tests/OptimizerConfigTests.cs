@@ -92,6 +92,22 @@ public class OptimizerConfigTests
     }
 
     [Fact]
+    public void DefaultConfig_AutoFlushStandby_IsFalse()
+    {
+        Assert.False(new OptimizerConfig().AutoFlushStandbyOnGameStart);
+    }
+
+    [Fact]
+    public void AutoFlushStandby_RoundTripsThroughJson()
+    {
+        var cfg = new OptimizerConfig { AutoFlushStandbyOnGameStart = true };
+        var json = JsonSerializer.Serialize(cfg);
+        var loaded = JsonSerializer.Deserialize<OptimizerConfig>(json,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        Assert.True(loaded.AutoFlushStandbyOnGameStart);
+    }
+
+    [Fact]
     public void GamePaths_RoundTripThroughJson()
     {
         var cfg = new OptimizerConfig();
