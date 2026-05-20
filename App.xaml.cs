@@ -56,7 +56,7 @@ public partial class App : Application
         // Tray icon (uses H.NotifyIcon.WinUI; must init on UI thread)
         TrayService = new TrayService(UIDispatcher) { WindowVisible = true };
         TrayService.TogglePinRequested    += () => OptimizerService?.TogglePinning();
-        TrayService.ShowStatusRequested   += ShowTrayStatus;
+        TrayService.FlushRamRequested     += () => OptimizerService?.FlushStandbyRam();
         TrayService.ToggleWindowRequested += ToggleWindow;
         TrayService.ExitRequested         += RequestExit;
         TrayService.Initialize();
@@ -83,17 +83,6 @@ public partial class App : Application
             svc.Start();
             UIDispatcher.TryEnqueue(() => OptimizerService = new OptimizerServiceWrapper(svc));
         });
-    }
-
-    private static void ShowTrayStatus()
-    {
-        var vm = MainViewModel;
-        var gpu = vm.GpuAvailable ? $"  GPU {vm.GpuUtil}% {vm.GpuTempC}C" : "";
-        var net = vm.RxNow >= 1024 ? $"  RX {vm.RxNow / 1024.0:F1}MB/s" : $"  RX {vm.RxNow}KB/s";
-        var msg = $"{(vm.IsGaming ? $"Gaming: {vm.GameName}" : "Idle")}  " +
-                  $"CPU {vm.GameCpuPct}%{gpu}{net}  " +
-                  $"{(vm.PinningEnabled ? "PIN ON" : "PIN OFF")}";
-        TrayService?.ShowBalloon(msg);
     }
 
     private static void ToggleWindow()

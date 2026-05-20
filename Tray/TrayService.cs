@@ -40,7 +40,7 @@ public class TrayService : IDisposable
     private string? _pendingBalloon;
 
     public event Action? TogglePinRequested;
-    public event Action? ShowStatusRequested;
+    public event Action? FlushRamRequested;
     public event Action? ToggleWindowRequested;
     public event Action? ExitRequested;
 
@@ -64,22 +64,22 @@ public class TrayService : IDisposable
             // The tray menu renders as a native Win32 popup, which invokes each
             // item's Command - Click events are never raised because the items
             // are not in a live XAML visual tree. All items must use Command.
+            var windowItem = new MenuFlyoutItem
+            {
+                Text = "Show Window",
+                Command = new RelayCommand(() => ToggleWindowRequested?.Invoke()),
+            };
+
             var pinItem = new MenuFlyoutItem
             {
                 Text = "CPU Pinning: ON",
                 Command = new RelayCommand(() => TogglePinRequested?.Invoke()),
             };
 
-            var statusItem = new MenuFlyoutItem
+            var flushItem = new MenuFlyoutItem
             {
-                Text = "Show Status",
-                Command = new RelayCommand(() => ShowStatusRequested?.Invoke()),
-            };
-
-            var windowItem = new MenuFlyoutItem
-            {
-                Text = "Show Window",
-                Command = new RelayCommand(() => ToggleWindowRequested?.Invoke()),
+                Text = "Flush Standby RAM",
+                Command = new RelayCommand(() => FlushRamRequested?.Invoke()),
             };
 
             var exitItem = new MenuFlyoutItem
@@ -89,10 +89,9 @@ public class TrayService : IDisposable
             };
 
             var menu = new MenuFlyout();
-            menu.Items.Add(pinItem);
-            menu.Items.Add(statusItem);
-            menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(windowItem);
+            menu.Items.Add(pinItem);
+            menu.Items.Add(flushItem);
             menu.Items.Add(new MenuFlyoutSeparator());
             menu.Items.Add(exitItem);
 
@@ -110,7 +109,7 @@ public class TrayService : IDisposable
                     : $"Idle | CPU {GameCpuPct}%{gpuPart} | {pin}";
                 _icon.ToolTipText = tip[..Math.Min(127, tip.Length)];
                 pinItem.Text = $"CPU Pinning: {(PinEnabled ? "ON" : "OFF")}";
-                windowItem.Text = WindowVisible ? "Hide to Tray" : "Show Window";
+                windowItem.Text = WindowVisible ? "Hide Window" : "Show Window";
 
                 if (_pendingBalloon is not null)
                 {
