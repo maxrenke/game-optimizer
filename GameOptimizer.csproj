@@ -13,6 +13,12 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      Unpackaged app: bundle the Windows App SDK runtime into the output
+      folder so the exe runs without a system-wide WinAppSDK install
+      (otherwise it crashes at startup with REGDB_E_CLASSNOTREG).
+    -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
   </PropertyGroup>
 
   <ItemGroup>
