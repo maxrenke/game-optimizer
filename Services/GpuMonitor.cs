@@ -34,7 +34,12 @@ public static class GpuMonitor
             string output;
             try
             {
-                output = await proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                // Drain both pipes concurrently - reading only stdout while stderr
+                // fills its buffer would deadlock the child until the timeout.
+                var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                var stderrTask = proc.StandardError.ReadToEndAsync(timeout.Token);
+                output = await stdoutTask;
+                await stderrTask;
                 await proc.WaitForExitAsync(timeout.Token);
             }
             catch (OperationCanceledException)
@@ -80,7 +85,12 @@ public static class GpuMonitor
             string output;
             try
             {
-                output = await proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                // Drain both pipes concurrently - reading only stdout while stderr
+                // fills its buffer would deadlock the child until the timeout.
+                var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeout.Token);
+                var stderrTask = proc.StandardError.ReadToEndAsync(timeout.Token);
+                output = await stdoutTask;
+                await stderrTask;
                 await proc.WaitForExitAsync(timeout.Token);
             }
             catch (OperationCanceledException)

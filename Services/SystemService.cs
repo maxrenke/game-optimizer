@@ -22,7 +22,6 @@ public class SystemService
     private const string CaptureVal  = "AppCaptureEnabled";
 
     private int? _originalPrio;
-    private ServiceStartMode? _sysMainOriginalStart;
     private bool _sysMainStopped;
 
     private int? _origDvr;
@@ -55,10 +54,9 @@ public class SystemService
             using var svc = new ServiceController("SysMain");
             if (svc.StartType != ServiceStartMode.Disabled && svc.Status == ServiceControllerStatus.Running)
             {
-                _sysMainOriginalStart = svc.StartType;
                 _sysMainStopped = true;
                 Task.Run(() => { try { svc.Stop(); } catch { } });
-                LogEntry?.Invoke($"[SYS] SysMain suspended (was {_sysMainOriginalStart})");
+                LogEntry?.Invoke($"[SYS] SysMain suspended (was {svc.StartType})");
             }
             else if (svc.StartType == ServiceStartMode.Disabled)
             {
@@ -87,11 +85,11 @@ public class SystemService
         {
             try
             {
-                var startType = _sysMainOriginalStart ?? ServiceStartMode.Automatic;
+                // We only stopped the service; its StartType was never changed,
+                // so restarting it is all that's needed to undo our change.
                 using var svc = new ServiceController("SysMain");
-                ServiceHelper.ChangeStartMode(svc, startType);
                 svc.Start();
-                LogEntry?.Invoke($"[SYS] SysMain restarted (StartType restored to {startType})");
+                LogEntry?.Invoke("[SYS] SysMain restarted");
             }
             catch { }
         }
@@ -170,51 +168,5 @@ public class SystemService
             }
         }
         catch { }
-    }
-}
-
-// Helper to change service start mode (ServiceController doesn't expose this directly)
-internal static class ServiceHelper
-{
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool ChangeServiceConfig(IntPtr hService, uint nServiceType, uint nStartType,
-        uint nErrorControl, string? lpBinaryPathName, string? lpLoadOrderGroup, IntPtr lpdwTagId,
-        string? lpDependencies, string? lpServiceStartName, string? lpPassword, string? lpDisplayName);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern bool CloseServiceHandle(IntPtr hSCObject);
-
-    public static void ChangeStartMode(ServiceController svc, ServiceStartMode mode)
-    {
-        try
-        {
-            // Use ServiceController's handle via reflection (simplest portable approach)
-            var field = typeof(ServiceController).GetField("serviceHandle",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var handle = (SafeHandle?)field?.GetValue(svc);
-            if (handle is not null)
-            {
-                ChangeServiceConfig(handle.DangerousGetHandle(),
-                    0xFFFFFFFF, (uint)mode, 0xFFFFFFFF,
-                    null, null, IntPtr.Zero, null, null, null, null);
-            }
-        }
-        catch
-        {
-            // Fall back: use sc.exe
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "sc.exe",
-                Arguments = $"config SysMain start= {mode switch
-                {
-                    ServiceStartMode.Automatic => "auto",
-                    ServiceStartMode.Manual => "demand",
-                    ServiceStartMode.Disabled => "disabled",
-                    _ => "auto"
-                }}",
-                CreateNoWindow = true,
-                UseShellExecute = false
-            });
-        }
     }
 }

@@ -45,6 +45,7 @@ public class OptimizerService : IDisposable
     private int _scanCount;     // increments every 1s
     private DateTime _startTime;
     private int _prevAlertCount;
+    private int _reportCount = -1;   // cached; -1 = not yet counted
 
     // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
     private int[] _lastCoreData = [];
@@ -157,7 +158,12 @@ public class OptimizerService : IDisposable
         AddLog("[RESET] All process affinities, priorities, and system settings restored to defaults");
     }
 
-    public string SaveReport() => _sessions.SaveReport(_startTime);
+    public string SaveReport()
+    {
+        var path = _sessions.SaveReport(_startTime);
+        if (!string.IsNullOrEmpty(path)) _reportCount = CountReports();
+        return path;
+    }
 
     /// <summary>
     /// Purges the Windows standby memory list and logs the result. Safe to
@@ -171,7 +177,15 @@ public class OptimizerService : IDisposable
             : "[SYS] Standby RAM flush failed (needs admin)");
     }
 
+    // Cached so the per-second snapshot path never touches the filesystem.
+    // Refreshed on first read and whenever a report is written.
     public int ReportCount()
+    {
+        if (_reportCount < 0) _reportCount = CountReports();
+        return _reportCount;
+    }
+
+    private static int CountReports()
     {
         try { return Directory.GetFiles(SessionTracker.ReportDir, "*.txt").Length; } catch { return 0; }
     }
