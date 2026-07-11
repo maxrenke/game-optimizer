@@ -81,10 +81,9 @@ public static class CpuMonitor
 
     public static int ZonePct(int[] coreData, long mask)
     {
-        if (coreData.Length == 0) return 0;
-        var vals = new List<int>();
+        int sum = 0, count = 0;
         for (int i = 0; i < coreData.Length; i++)
-            if ((mask & (1L << i)) != 0) vals.Add(coreData[i]);
-        return vals.Count > 0 ? (int)vals.Average() : 0;
+            if ((mask & (1L << i)) != 0) { sum += coreData[i]; count++; }
+        return count > 0 ? sum / count : 0;
     }
 }

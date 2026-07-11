@@ -5,15 +5,19 @@ using Windows.UI;
 
 namespace GameOptimizer.Converters;
 
+// Converters fire on every bound update (once per 1s snapshot) - brushes are
+// immutable here, so each converter shares static instances instead of
+// allocating a new SolidColorBrush per call.
 public class PctToColorConverter : IValueConverter
 {
+    private static readonly SolidColorBrush Red    = new(Color.FromArgb(255, 220, 60, 60));
+    private static readonly SolidColorBrush Yellow = new(Color.FromArgb(255, 220, 170, 50));
+    private static readonly SolidColorBrush Green  = new(Color.FromArgb(255, 80, 200, 100));
+
     public object Convert(object value, Type t, object p, string l)
     {
         var pct = value is int i ? i : 0;
-        var color = pct > 80 ? Color.FromArgb(255, 220, 60, 60)
-                  : pct > 50 ? Color.FromArgb(255, 220, 170, 50)
-                              : Color.FromArgb(255, 80, 200, 100);
-        return new SolidColorBrush(color);
+        return pct > 80 ? Red : pct > 50 ? Yellow : Green;
     }
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
@@ -52,12 +56,11 @@ public class BoolToGlyphConverter : IValueConverter
 
 public class BoolToGamingBrushConverter : IValueConverter
 {
-    public object Convert(object value, Type t, object p, string l)
-    {
-        var gaming = value is bool b && b;
-        return new SolidColorBrush(gaming ? Color.FromArgb(255, 200, 100, 220)
-                                          : Color.FromArgb(255, 150, 150, 150));
-    }
+    private static readonly SolidColorBrush Gaming = new(Color.FromArgb(255, 200, 100, 220));
+    private static readonly SolidColorBrush Idle   = new(Color.FromArgb(255, 150, 150, 150));
+
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? Gaming : Idle;
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 
@@ -77,13 +80,14 @@ public class InvertBoolToVisibilityConverter : IValueConverter
 
 public class TempToColorConverter : IValueConverter
 {
+    private static readonly SolidColorBrush Red    = new(Color.FromArgb(255, 220, 60, 60));
+    private static readonly SolidColorBrush Yellow = new(Color.FromArgb(255, 220, 170, 50));
+    private static readonly SolidColorBrush Green  = new(Color.FromArgb(255, 80, 200, 100));
+
     public object Convert(object value, Type t, object p, string l)
     {
         var temp = value is int i ? i : 0;
-        var color = temp >= 80 ? Color.FromArgb(255, 220, 60, 60)
-                  : temp >= 70 ? Color.FromArgb(255, 220, 170, 50)
-                               : Color.FromArgb(255, 80, 200, 100);
-        return new SolidColorBrush(color);
+        return temp >= 80 ? Red : temp >= 70 ? Yellow : Green;
     }
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
@@ -97,12 +101,11 @@ public class AlertToGlyphConverter : IValueConverter
 
 public class AlertToColorConverter : IValueConverter
 {
-    public object Convert(object value, Type t, object p, string l)
-    {
-        var alert = value is bool b && b;
-        return new SolidColorBrush(alert ? Color.FromArgb(255, 220, 60, 60)
-                                         : Color.FromArgb(255, 80, 200, 100));
-    }
+    private static readonly SolidColorBrush Alert = new(Color.FromArgb(255, 220, 60, 60));
+    private static readonly SolidColorBrush Ok    = new(Color.FromArgb(255, 80, 200, 100));
+
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? Alert : Ok;
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 
@@ -117,34 +120,31 @@ public class PinToTextConverter : IValueConverter
 
 public class PinToColorConverter : IValueConverter
 {
-    public object Convert(object value, Type t, object p, string l)
-    {
-        var on = value is bool b && b;
-        return new SolidColorBrush(on ? Color.FromArgb(255, 80, 220, 100)
-                                      : Color.FromArgb(255, 220, 160, 40));
-    }
+    private static readonly SolidColorBrush On  = new(Color.FromArgb(255, 80, 220, 100));
+    private static readonly SolidColorBrush Off = new(Color.FromArgb(255, 220, 160, 40));
+
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? On : Off;
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 
 public class PinToBgConverter : IValueConverter
 {
-    public object Convert(object value, Type t, object p, string l)
-    {
-        var on = value is bool b && b;
-        return new SolidColorBrush(on ? Color.FromArgb(55, 60, 200, 80)
-                                      : Color.FromArgb(55, 220, 140, 30));
-    }
+    private static readonly SolidColorBrush On  = new(Color.FromArgb(55, 60, 200, 80));
+    private static readonly SolidColorBrush Off = new(Color.FromArgb(55, 220, 140, 30));
+
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? On : Off;
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 
 public class PinToBorderConverter : IValueConverter
 {
-    public object Convert(object value, Type t, object p, string l)
-    {
-        var on = value is bool b && b;
-        return new SolidColorBrush(on ? Color.FromArgb(160, 60, 200, 80)
-                                      : Color.FromArgb(160, 220, 140, 30));
-    }
+    private static readonly SolidColorBrush On  = new(Color.FromArgb(160, 60, 200, 80));
+    private static readonly SolidColorBrush Off = new(Color.FromArgb(160, 220, 140, 30));
+
+    public object Convert(object value, Type t, object p, string l) =>
+        value is bool b && b ? On : Off;
     public object ConvertBack(object v, Type t, object p, string l) => throw new NotImplementedException();
 }
 

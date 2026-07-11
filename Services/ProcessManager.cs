@@ -35,7 +35,11 @@ public class ProcessManager : IDisposable
     public ConcurrentDictionary<int, string> ActiveGames { get; } = new();
     private readonly ConcurrentDictionary<int, string> _appliedMediaZone = new();
     private readonly ConcurrentDictionary<int, string> _appliedBgProcs = new();
-    private readonly ConcurrentDictionary<int, byte> _pathFailCache = new();
+
+    // PIDs known not to be games (path unresolvable, or resolved outside every
+    // game path). A process's image path never changes, so once classified the
+    // per-scan path lookup is skipped entirely.
+    private readonly ConcurrentDictionary<int, byte> _notGamePids = new();
 
     // Track every PID we've modified so ReleasePinning/RestoreAll only touches those
     private readonly ConcurrentDictionary<int, byte> _modifiedPids = new();
@@ -67,7 +71,14 @@ public class ProcessManager : IDisposable
     public IReadOnlyList<string> MediaProcessNames => [.. _appliedMediaZone.Values.Distinct()];
     public IReadOnlyList<string> BgProcessNames => [.. _appliedBgProcs.Values.Distinct()];
 
-    private string[] AllBgProcs => [.. BuiltInBgProcs, .. _cfg.ExtraThrottledProcs];
+    private bool IsBgProc(string name)
+    {
+        foreach (var b in BuiltInBgProcs)
+            if (b.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
+        foreach (var b in _cfg.ExtraThrottledProcs)
+            if (string.Equals(b, name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     // Subscribe to WMI process start/stop events for instant detection.
     // Fires on a WMI thread - all handlers are thread-safe.
@@ -113,7 +124,7 @@ public class ProcessManager : IDisposable
             }
 
             // Check bg procs immediately
-            if (AllBgProcs.Any(b => b.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            if (IsBgProc(name))
             {
                 if (PinningEnabled)
                 {
@@ -122,7 +133,7 @@ public class ProcessManager : IDisposable
                     {
                         try
                         {
-                            proc.PriorityClass = ProcessPriorityClass.BelowNormal;
+                            proc.PriorityClass = ProcessPriorityClass.Idle;
                             proc.ProcessorAffinity = BgAffinity;
                             ProcessControl.SetIoPriorityVeryLow(pid);
                             _modifiedPids[pid] = 0;
@@ -151,111 +162,133 @@ public class ProcessManager : IDisposable
             _appliedMediaZone.TryRemove(pid, out _);
             _appliedBgProcs.TryRemove(pid, out _);
             _modifiedPids.TryRemove(pid, out _);
+            _notGamePids.TryRemove(pid, out _);   // PID may be reused for a game
         }
         catch { }
     }
 
+    // One process snapshot per tick drives everything below: game detection,
+    // the firefox/vlc fallback, suspend candidates, exited-game detection, and
+    // pruning of every tracking dictionary.
     public List<string> Scan()
     {
         var newGames = new List<string>();
-        foreach (var proc in SafeGetProcesses())
+        var procs = SafeGetProcesses();
+        var alive = new HashSet<int>(procs.Length);
+        List<(int Pid, string Name)>? suspendCandidates = null;
+
+        HashSet<string>? suspendNames = null;
+        if (PinningEnabled)
         {
-            using (proc)
+            foreach (var app in _cfg.SuspendDuringGame)
             {
-                if (ActiveGames.ContainsKey(proc.Id)) continue;
-                if (IsExcluded(proc.ProcessName)) continue;
+                if (!app.Enabled || string.IsNullOrWhiteSpace(app.ProcessName)) continue;
+                (suspendNames ??= new(StringComparer.OrdinalIgnoreCase)).Add(app.ProcessName);
+            }
+        }
+
+        try
+        {
+            foreach (var proc in procs)
+            {
+                int pid = proc.Id;
+                alive.Add(pid);
+                var name = proc.ProcessName;
+
+                if (PinningEnabled)
+                {
+                    // Pin new firefox + vlc (fallback for when WMI start event is missed)
+                    if ((name.Equals("firefox", StringComparison.OrdinalIgnoreCase) ||
+                         name.Equals("vlc", StringComparison.OrdinalIgnoreCase)) &&
+                        !_appliedMediaZone.ContainsKey(pid))
+                    {
+                        ApplyMediaZone(proc);
+                        _appliedMediaZone[pid] = name;
+                        LogEntry?.Invoke($"[MEDIA] Pinned {name} (PID {pid}) to media zone");
+                    }
+
+                    if (suspendNames is not null && suspendNames.Contains(name) &&
+                        pid != Environment.ProcessId)
+                        (suspendCandidates ??= []).Add((pid, name));
+                }
+
+                if (ActiveGames.ContainsKey(pid)) continue;
+                if (_notGamePids.ContainsKey(pid)) continue;
+                if (IsExcluded(name)) continue;
+
                 var path = GetProcPath(proc);
                 if (IsGamePath(path))
                 {
                     if (ApplyGame(proc))
                     {
-                        ActiveGames[proc.Id] = proc.ProcessName;
-                        _modifiedPids[proc.Id] = 0;
-                        newGames.Add(proc.ProcessName);
-                        LogEntry?.Invoke($"[GAME] Detected: {proc.ProcessName} (PID {proc.Id})");
+                        ActiveGames[pid] = name;
+                        _modifiedPids[pid] = 0;
+                        newGames.Add(name);
+                        LogEntry?.Invoke($"[GAME] Detected: {name} (PID {pid})");
                     }
+                }
+                else if (path is not null)
+                {
+                    _notGamePids[pid] = 0;
+                }
+            }
+
+            // Re-apply affinity each scan to counter external tools
+            if (PinningEnabled && !ActiveGames.IsEmpty)
+            {
+                foreach (var proc in procs)
+                {
+                    if (!ActiveGames.TryGetValue(proc.Id, out var gameName)) continue;
+                    var (mask, _) = ResolveGameSettings(_cfg, gameName);
+                    try
+                    {
+                        if (proc.ProcessorAffinity.ToInt64() != mask)
+                            proc.ProcessorAffinity = (IntPtr)mask;
+                    }
+                    catch { }
                 }
             }
         }
-
-        // Re-apply affinity each scan to counter external tools
-        if (PinningEnabled)
+        finally
         {
-            foreach (var pid in ActiveGames.Keys.ToList())
-            {
-                if (!ActiveGames.TryGetValue(pid, out var gameName)) continue;
-                using var p = SafeGetProcess(pid);
-                if (p is null) continue;
-                var (mask, _) = ResolveGameSettings(_cfg, gameName);
-                if (p.ProcessorAffinity.ToInt64() != mask)
-                    try { p.ProcessorAffinity = (IntPtr)mask; } catch { }
-            }
+            foreach (var proc in procs) proc.Dispose();
         }
 
         // Detect exited games (fallback for when WMI stop event is missed)
         foreach (var pid in ActiveGames.Keys.ToList())
         {
-            using var p = SafeGetProcess(pid);
-            if (p is null)
-            {
-                if (ActiveGames.TryRemove(pid, out var exitedName))
-                    LogEntry?.Invoke($"[ENDED] {exitedName} closed (PID {pid})");
-            }
+            if (!alive.Contains(pid) && ActiveGames.TryRemove(pid, out var exitedName))
+                LogEntry?.Invoke($"[ENDED] {exitedName} closed (PID {pid})");
         }
 
-        // Pin new firefox + vlc (fallback for when WMI start event is missed)
-        if (PinningEnabled)
-        {
-            foreach (var proc in SafeGetProcessesByName("firefox")
-                .Concat(SafeGetProcessesByName("vlc")))
-            {
-                using (proc)
-                {
-                    if (!_appliedMediaZone.ContainsKey(proc.Id))
-                    {
-                        ApplyMediaZone(proc);
-                        _appliedMediaZone[proc.Id] = proc.ProcessName;
-                        LogEntry?.Invoke($"[MEDIA] Pinned {proc.ProcessName} (PID {proc.Id}) to media zone");
-                    }
-                }
-            }
-        }
+        ReconcileSuspension(suspendCandidates);
 
-        ReconcileSuspension();
-
-        PruneDeadPids(_appliedMediaZone);
-        PruneDeadPids(_appliedBgProcs);
-        PruneDeadPids(_pathFailCache);
-        PruneDeadPids(_suspendedPids);
+        PruneDeadPids(_appliedMediaZone, alive);
+        PruneDeadPids(_appliedBgProcs, alive);
+        PruneDeadPids(_notGamePids, alive);
+        PruneDeadPids(_suspendedPids, alive);
 
         return newGames;
     }
 
     /// <summary>
     /// Suspends or resumes the configured background apps depending on whether
-    /// a game is active. Gated on <see cref="PinningEnabled"/> so the
-    /// pinning-off state remains a guaranteed no-op.
+    /// a game is active. Candidates come from the single per-scan process
+    /// snapshot. Gated on <see cref="PinningEnabled"/> so the pinning-off
+    /// state remains a guaranteed no-op.
     /// </summary>
-    private void ReconcileSuspension()
+    private void ReconcileSuspension(List<(int Pid, string Name)>? candidates)
     {
         if (PinningEnabled && !ActiveGames.IsEmpty)
         {
-            foreach (var app in _cfg.SuspendDuringGame)
+            if (candidates is null) return;
+            foreach (var (pid, name) in candidates)
             {
-                if (!app.Enabled || string.IsNullOrWhiteSpace(app.ProcessName)) continue;
-                foreach (var proc in SafeGetProcessesByName(app.ProcessName))
+                if (_suspendedPids.ContainsKey(pid)) continue;
+                if (ProcessControl.Suspend(pid))
                 {
-                    using (proc)
-                    {
-                        if (proc.Id == Environment.ProcessId) continue;
-                        if (_suspendedPids.ContainsKey(proc.Id)) continue;
-                        if (ProcessControl.Suspend(proc.Id))
-                        {
-                            _suspendedPids[proc.Id] = proc.ProcessName;
-                            LogEntry?.Invoke(
-                                $"[SUSPEND] Paused {proc.ProcessName} (PID {proc.Id}) - game running");
-                        }
-                    }
+                    _suspendedPids[pid] = name;
+                    LogEntry?.Invoke($"[SUSPEND] Paused {name} (PID {pid}) - game running");
                 }
             }
         }
@@ -282,7 +315,7 @@ public class ProcessManager : IDisposable
     }
 
     /// <summary>
-    /// Pins all known background process names to the BG affinity zone at BelowNormal priority.
+    /// Pins all known background process names to the BG affinity zone at Idle priority.
     /// No-op when <see cref="PinningEnabled"/> is false - guaranteed to make zero process changes.
     /// Re-run periodically (~60s) to catch processes that started after the last scan.
     /// </summary>
@@ -290,35 +323,34 @@ public class ProcessManager : IDisposable
     {
         if (!PinningEnabled) return;
 
-        // Parallel across process name lookups to avoid serial GetProcessesByName calls
-        Parallel.ForEach(AllBgProcs, name =>
+        // One process snapshot instead of a GetProcessesByName sweep per name
+        var bgNames = new HashSet<string>(BuiltInBgProcs, StringComparer.OrdinalIgnoreCase);
+        foreach (var extra in _cfg.ExtraThrottledProcs)
+            if (!string.IsNullOrWhiteSpace(extra)) bgNames.Add(extra);
+
+        foreach (var proc in SafeGetProcesses())
         {
-            foreach (var proc in SafeGetProcessesByName(name))
+            using (proc)
             {
-                using (proc)
+                if (!bgNames.Contains(proc.ProcessName)) continue;
+                try
                 {
-                    try
-                    {
-                        proc.PriorityClass = ProcessPriorityClass.BelowNormal;
-                        proc.ProcessorAffinity = BgAffinity;
-                        ProcessControl.SetIoPriorityVeryLow(proc.Id);
-                        _modifiedPids[proc.Id] = 0;
-                        _appliedBgProcs[proc.Id] = proc.ProcessName;
-                    }
-                    catch { }
+                    proc.PriorityClass = ProcessPriorityClass.Idle;
+                    proc.ProcessorAffinity = BgAffinity;
+                    ProcessControl.SetIoPriorityVeryLow(proc.Id);
+                    _modifiedPids[proc.Id] = 0;
+                    _appliedBgProcs[proc.Id] = proc.ProcessName;
                 }
+                catch { }
             }
-        });
+        }
     }
 
-    // Remove tracking entries for PIDs that no longer exist
-    private static void PruneDeadPids<T>(ConcurrentDictionary<int, T> dict)
+    // Remove tracking entries for PIDs no longer in the latest process snapshot
+    private static void PruneDeadPids<T>(ConcurrentDictionary<int, T> dict, HashSet<int> alive)
     {
-        foreach (var pid in dict.Keys.ToList())
-        {
-            using var p = SafeGetProcess(pid);
-            if (p is null) dict.TryRemove(pid, out _);
-        }
+        foreach (var pid in dict.Keys)
+            if (!alive.Contains(pid)) dict.TryRemove(pid, out _);
     }
 
     public void ReleasePinning()
@@ -337,6 +369,7 @@ public class ProcessManager : IDisposable
             {
                 p.ProcessorAffinity = _allCores;
                 if (p.PriorityClass == ProcessPriorityClass.BelowNormal ||
+                    p.PriorityClass == ProcessPriorityClass.Idle ||
                     p.PriorityClass == ProcessPriorityClass.High)
                     p.PriorityClass = ProcessPriorityClass.Normal;
             }
@@ -386,7 +419,7 @@ public class ProcessManager : IDisposable
         _appliedMediaZone.Clear();
         _appliedBgProcs.Clear();
         _modifiedPids.Clear();
-        _pathFailCache.Clear();
+        _notGamePids.Clear();
         _suspendedPids.Clear();
     }
 
@@ -471,7 +504,6 @@ public class ProcessManager : IDisposable
 
     private string? GetProcPath(Process proc)
     {
-        if (_pathFailCache.ContainsKey(proc.Id)) return null;
         string? path = null;
         try { path = proc.MainModule?.FileName; } catch { }
         if (path is null)
@@ -492,12 +524,14 @@ public class ProcessManager : IDisposable
         }
         if (path is null)
         {
+            // Give a brand-new process a few scans to expose its path before
+            // writing off the PID for good
             try
             {
                 var ageMs = (DateTime.Now - proc.StartTime).TotalMilliseconds;
-                if (ageMs > 5000) _pathFailCache[proc.Id] = 0;
+                if (ageMs > 5000) _notGamePids[proc.Id] = 0;
             }
-            catch { _pathFailCache[proc.Id] = 0; }
+            catch { _notGamePids[proc.Id] = 0; }
         }
         return path;
     }
@@ -512,7 +546,7 @@ public class ProcessManager : IDisposable
     private static bool IsExcluded(string name) =>
         NotAGame.Contains(name.Replace(".exe", "", StringComparison.OrdinalIgnoreCase));
 
-    private static IEnumerable<Process> SafeGetProcesses()
+    private static Process[] SafeGetProcesses()
     {
         try { return Process.GetProcesses(); } catch { return []; }
     }

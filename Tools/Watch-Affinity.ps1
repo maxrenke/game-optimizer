@@ -40,6 +40,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Compiled class beats per-process [pscustomobject] allocation in the 1 Hz
+# full-process snapshot loop
+class ProcInfo {
+    [string]$Name
+    [long]$Affinity
+    [string]$Priority
+    ProcInfo([string]$n, [long]$a, [string]$p) {
+        $this.Name = $n; $this.Affinity = $a; $this.Priority = $p
+    }
+}
+
 $coreCount = [Environment]::ProcessorCount
 $allMask   = ([long]1 -shl $coreCount) - 1
 $selfPid   = $PID
@@ -94,10 +106,8 @@ function Get-Snapshot {
         if ($p.Id -eq $selfPid) { continue }
         if ($Name -and $p.ProcessName -notlike "*$Name*") { continue }
         try {
-            $snap[$p.Id] = [pscustomobject]@{
-                Name = $p.ProcessName; Affinity = $p.ProcessorAffinity.ToInt64()
-                Priority = $p.PriorityClass.ToString()
-            }
+            $snap[$p.Id] = [ProcInfo]::new(
+                $p.ProcessName, $p.ProcessorAffinity.ToInt64(), $p.PriorityClass.ToString())
         }
         catch { }
     }
@@ -162,9 +172,9 @@ try {
             $cur = $now[$id]
             if (-not $last.ContainsKey($id)) { $baseline[$id] = $cur; continue }  # new process
             $old = $last[$id]
-            $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 
             if ($cur.Affinity -ne $old.Affinity) {
+                $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
                 $restored = $cur.Affinity -eq $allMask
                 if ($restored) { $stats.Restored++ } else { $stats.Pinned++ }
                 $verb = if ($restored) { 'RESTORED' } else { 'PINNED  ' }
@@ -178,6 +188,7 @@ try {
                 Write-Log "$stamp  $txt"
             }
             if ($cur.Priority -ne $old.Priority) {
+                $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
                 $stats.Priority++
                 $txt = 'PRIORITY {0,-22} PID {1,-6} {2} -> {3}' -f `
                     (Show-Name $cur.Name), $id, $old.Priority, $cur.Priority

@@ -16,15 +16,19 @@ public sealed partial class MainPage : Page
     public MainPage()
     {
         InitializeComponent();
+        // Each canvas redraws only when its own index advances (histories are
+        // always set before their index, so the index change is the signal) -
+        // redrawing everything on any history property meant up to 6 full
+        // redraws of all four canvases per tick.
         ViewModel.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(ViewModel.RxHistory)
-                               or nameof(ViewModel.TxHistory)
-                               or nameof(ViewModel.NetHistoryIndex)
-                               or nameof(ViewModel.GameCpuHistoryIndex)
-                               or nameof(ViewModel.GpuUtilHistoryIndex)
-                               or nameof(ViewModel.LatencyHistoryIndex))
-                DrawSparklines();
+            switch (e.PropertyName)
+            {
+                case nameof(ViewModel.NetHistoryIndex):     DrawNetworkSparklines(); break;
+                case nameof(ViewModel.GameCpuHistoryIndex): DrawCpuSparkline(); break;
+                case nameof(ViewModel.GpuUtilHistoryIndex): DrawGpuSparkline(); break;
+                case nameof(ViewModel.LatencyHistoryIndex): DrawLatencySparkline(); break;
+            }
         };
 
         ViewModel.LogLines.CollectionChanged += (_, _) =>
@@ -38,14 +42,6 @@ public sealed partial class MainPage : Page
                     LogListView.ScrollIntoView(LogListView.Items[^1]);
             });
         };
-    }
-
-    private void DrawSparklines()
-    {
-        DrawNetworkSparklines();
-        DrawCpuSparkline();
-        DrawGpuSparkline();
-        DrawLatencySparkline();
     }
 
     private void DrawLatencySparkline()
@@ -101,6 +97,12 @@ public sealed partial class MainPage : Page
                  w, h, 0, Windows.UI.Color.FromArgb(255, 64, 160, 240), fill: true);
     }
 
+    // Brushes are shareable across elements - cache per color instead of
+    // allocating stroke/gradient/grid brushes on every 1s redraw
+    private static readonly SolidColorBrush GridBrush = new(Windows.UI.Color.FromArgb(18, 255, 255, 255));
+    private static readonly Dictionary<Windows.UI.Color, SolidColorBrush> StrokeCache = [];
+    private static readonly Dictionary<Windows.UI.Color, LinearGradientBrush> FillCache = [];
+
     private static void DrawLine(Canvas canvas, int[] history, int histIdx, int totalSize, int window,
                                   double canvasW, double lineH, double offsetY,
                                   Windows.UI.Color color, bool fill = false)
@@ -119,7 +121,7 @@ public sealed partial class MainPage : Page
             canvas.Children.Add(new Line
             {
                 X1 = 0, Y1 = gy, X2 = canvasW, Y2 = gy,
-                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(18, 255, 255, 255)),
+                Stroke = GridBrush,
                 StrokeThickness = 1
             });
         }
@@ -142,15 +144,19 @@ public sealed partial class MainPage : Page
             fillPts.Add(new Windows.Foundation.Point(canvasW, offsetY + lineH));
             fillPts.Add(new Windows.Foundation.Point(0, offsetY + lineH));
 
-            var grad = new LinearGradientBrush
+            if (!FillCache.TryGetValue(color, out var grad))
             {
-                StartPoint = new Windows.Foundation.Point(0, 0),
-                EndPoint   = new Windows.Foundation.Point(0, 1)
-            };
-            grad.GradientStops.Add(new GradientStop
-                { Color = Windows.UI.Color.FromArgb(55, color.R, color.G, color.B), Offset = 0 });
-            grad.GradientStops.Add(new GradientStop
-                { Color = Windows.UI.Color.FromArgb(0,  color.R, color.G, color.B), Offset = 1 });
+                grad = new LinearGradientBrush
+                {
+                    StartPoint = new Windows.Foundation.Point(0, 0),
+                    EndPoint   = new Windows.Foundation.Point(0, 1)
+                };
+                grad.GradientStops.Add(new GradientStop
+                    { Color = Windows.UI.Color.FromArgb(55, color.R, color.G, color.B), Offset = 0 });
+                grad.GradientStops.Add(new GradientStop
+                    { Color = Windows.UI.Color.FromArgb(0,  color.R, color.G, color.B), Offset = 1 });
+                FillCache[color] = grad;
+            }
 
             canvas.Children.Add(new Polygon { Points = fillPts, Fill = grad });
         }
@@ -158,10 +164,12 @@ public sealed partial class MainPage : Page
         // Stroke line on top
         var linePoints = new PointCollection();
         foreach (var p in pts) linePoints.Add(p);
+        if (!StrokeCache.TryGetValue(color, out var stroke))
+            StrokeCache[color] = stroke = new SolidColorBrush(color);
         canvas.Children.Add(new Polyline
         {
             Points = linePoints,
-            Stroke = new SolidColorBrush(color),
+            Stroke = stroke,
             StrokeThickness = 1.5,
             StrokeLineJoin = PenLineJoin.Round
         });

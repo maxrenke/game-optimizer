@@ -10,6 +10,17 @@ public partial class MainPageViewModel : ObservableObject
 {
     private readonly DispatcherQueue _dispatcher;
 
+    // Brushes are immutable here - share one instance per color instead of
+    // allocating new ones on every 1s snapshot (all use is on the UI thread)
+    private static readonly SolidColorBrush GrayBrush     = new(Color.FromArgb(255, 120, 120, 120));
+    private static readonly SolidColorBrush GreenBrush    = new(Color.FromArgb(255, 80, 200, 100));
+    private static readonly SolidColorBrush AmberBrush    = new(Color.FromArgb(255, 220, 170, 50));
+    private static readonly SolidColorBrush RedBrush      = new(Color.FromArgb(255, 220, 60, 60));
+    private static readonly SolidColorBrush BtRedBrush    = new(Color.FromArgb(255, 230, 60, 60));
+    private static readonly SolidColorBrush BtBlueBrush   = new(Color.FromArgb(255, 80, 180, 220));
+    private static readonly SolidColorBrush BtGrayBrush   = new(Color.FromArgb(255, 100, 100, 100));
+    private static readonly SolidColorBrush BtIdleBrush   = new(Color.FromArgb(255, 80, 80, 80));
+
     public MainPageViewModel(DispatcherQueue dispatcher)
     {
         _dispatcher = dispatcher;
@@ -58,8 +69,7 @@ public partial class MainPageViewModel : ObservableObject
     [ObservableProperty] public partial int LatencyMs { get; set; }
     [ObservableProperty] public partial int JitterMs { get; set; }
     [ObservableProperty] public partial string LatencyText { get; set; } = "--";
-    [ObservableProperty] public partial Brush LatencyBrush { get; set; } =
-        new SolidColorBrush(Color.FromArgb(255, 120, 120, 120));
+    [ObservableProperty] public partial Brush LatencyBrush { get; set; } = GrayBrush;
     [ObservableProperty] public partial int[] LatencyHistory { get; set; } =
         new int[LatencyMonitor.HistorySize];
     [ObservableProperty] public partial int LatencyHistoryIndex { get; set; }
@@ -67,7 +77,7 @@ public partial class MainPageViewModel : ObservableObject
     // ── Bottleneck ─────────────────────────────────────────────
     [ObservableProperty] public partial BottleneckState Bottleneck { get; set; } = BottleneckState.None;
     [ObservableProperty] public partial string BottleneckLabel { get; set; } = "[--------]  No game running";
-    [ObservableProperty] public partial Brush BottleneckBrush { get; set; } = new SolidColorBrush(Color.FromArgb(255, 80, 80, 80));
+    [ObservableProperty] public partial Brush BottleneckBrush { get; set; } = BtIdleBrush;
 
     // ── Alerts ─────────────────────────────────────────────────
     [ObservableProperty] public partial string AlertText { get; set; } = "All zones healthy";
@@ -146,25 +156,19 @@ public partial class MainPageViewModel : ObservableObject
             LatencyHistory = s.LatencyHistory;
             LatencyHistoryIndex = s.LatencyHistoryIndex;
             LatencyText = s.LatencyMs > 0 ? s.LatencyMs.ToString() : "--";
-            LatencyBrush = new SolidColorBrush(
-                s.LatencyMs <= 0   ? Color.FromArgb(255, 120, 120, 120)
-              : s.LatencyMs <= 60  ? Color.FromArgb(255, 80, 200, 100)
-              : s.LatencyMs <= 120 ? Color.FromArgb(255, 220, 170, 50)
-              :                      Color.FromArgb(255, 220, 60, 60));
+            LatencyBrush = s.LatencyMs <= 0   ? GrayBrush
+                         : s.LatencyMs <= 60  ? GreenBrush
+                         : s.LatencyMs <= 120 ? AmberBrush
+                         :                      RedBrush;
 
             Bottleneck = s.Bottleneck;
             (BottleneckLabel, BottleneckBrush) = s.Bottleneck switch
             {
-                BottleneckState.Gpu      => ("[GPU-BOUND]  Lower resolution/quality - GPU is the limit",
-                                             new SolidColorBrush(Color.FromArgb(255, 230, 60, 60))),
-                BottleneckState.Cpu      => ("[CPU-BOUND]  Lower draw dist/entities - CPU starving GPU",
-                                             new SolidColorBrush(Color.FromArgb(255, 220, 170, 50))),
-                BottleneckState.Balanced => ("[BALANCED ]  Healthy load - good settings balance",
-                                             new SolidColorBrush(Color.FromArgb(255, 80, 200, 100))),
-                BottleneckState.Headroom => ("[HEADROOM ]  Both low - you can raise quality settings",
-                                             new SolidColorBrush(Color.FromArgb(255, 80, 180, 220))),
-                _                        => ("[--------]   No game running",
-                                             new SolidColorBrush(Color.FromArgb(255, 100, 100, 100)))
+                BottleneckState.Gpu      => ("[GPU-BOUND]  Lower resolution/quality - GPU is the limit", (Brush)BtRedBrush),
+                BottleneckState.Cpu      => ("[CPU-BOUND]  Lower draw dist/entities - CPU starving GPU", AmberBrush),
+                BottleneckState.Balanced => ("[BALANCED ]  Healthy load - good settings balance", GreenBrush),
+                BottleneckState.Headroom => ("[HEADROOM ]  Both low - you can raise quality settings", BtBlueBrush),
+                _                        => ("[--------]   No game running", BtGrayBrush)
             };
 
             HasAlert = s.Alerts.Count > 0;
@@ -208,6 +212,15 @@ public partial class MainPageViewModel : ObservableObject
 
 public class LogLine
 {
+    private static readonly SolidColorBrush Purple  = new(Color.FromArgb(255, 200, 100, 220));
+    private static readonly SolidColorBrush Gold    = new(Color.FromArgb(255, 200, 180, 60));
+    private static readonly SolidColorBrush Cyan    = new(Color.FromArgb(255, 80, 200, 220));
+    private static readonly SolidColorBrush Orange  = new(Color.FromArgb(255, 220, 140, 60));
+    private static readonly SolidColorBrush Green   = new(Color.FromArgb(255, 80, 200, 100));
+    private static readonly SolidColorBrush DimGray = new(Color.FromArgb(255, 100, 100, 100));
+    private static readonly SolidColorBrush Red     = new(Color.FromArgb(255, 220, 60, 60));
+    private static readonly SolidColorBrush Gray    = new(Color.FromArgb(255, 150, 150, 150));
+
     public string Text { get; }
     public Brush Foreground { get; }
 
@@ -216,16 +229,16 @@ public class LogLine
         Text = text;
         Foreground = text switch
         {
-            _ when text.Contains("[GAME]")  => new SolidColorBrush(Color.FromArgb(255, 200, 100, 220)),
-            _ when text.Contains("[ENDED]") => new SolidColorBrush(Color.FromArgb(255, 200, 180, 60)),
-            _ when text.Contains("[MEDIA]")   => new SolidColorBrush(Color.FromArgb(255, 80, 200, 220)),
-            _ when text.Contains("[SUSPEND]") => new SolidColorBrush(Color.FromArgb(255, 220, 140, 60)),
-            _ when text.Contains("[SYS]")   => new SolidColorBrush(Color.FromArgb(255, 200, 180, 60)),
-            _ when text.Contains("[PIN]")   => new SolidColorBrush(Color.FromArgb(255, 80, 200, 100)),
-            _ when text.Contains("[BG]")    => new SolidColorBrush(Color.FromArgb(255, 100, 100, 100)),
-            _ when text.Contains("[!]")     => new SolidColorBrush(Color.FromArgb(255, 220, 60, 60)),
-            _ when text.Contains("[INIT]")  => new SolidColorBrush(Color.FromArgb(255, 80, 200, 100)),
-            _                               => new SolidColorBrush(Color.FromArgb(255, 150, 150, 150)),
+            _ when text.Contains("[GAME]")    => Purple,
+            _ when text.Contains("[ENDED]")   => Gold,
+            _ when text.Contains("[MEDIA]")   => Cyan,
+            _ when text.Contains("[SUSPEND]") => Orange,
+            _ when text.Contains("[SYS]")     => Gold,
+            _ when text.Contains("[PIN]")     => Green,
+            _ when text.Contains("[BG]")      => DimGray,
+            _ when text.Contains("[!]")       => Red,
+            _ when text.Contains("[INIT]")    => Green,
+            _                                 => Gray,
         };
     }
 }
