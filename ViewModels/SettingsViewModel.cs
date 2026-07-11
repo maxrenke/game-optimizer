@@ -30,6 +30,12 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool StartWithWindows { get; set; } = false;
     [ObservableProperty] public partial bool AutoFlushStandby { get; set; } = false;
     [ObservableProperty] public partial bool DisableGameDvr { get; set; } = true;
+    [ObservableProperty] public partial bool AutoPinOnGameDetect { get; set; } = false;
+    [ObservableProperty] public partial bool LockGpuClocks { get; set; } = true;
+    [ObservableProperty] public partial string StopServicesText { get; set; } = "";
+
+    /// <summary>Feedback line under the save buttons ("Saved at ...", warnings).</summary>
+    [ObservableProperty] public partial string SaveStatus { get; set; } = "";
 
     public ObservableCollection<string> GamePaths { get; } = [];
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
@@ -59,6 +65,24 @@ public partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private void RemoveGamePath(string path) => GamePaths.Remove(path);
+
+    // Re-run the launcher library scan (Steam/Epic/GOG/Ubisoft/EA) and merge any
+    // new paths. Auto-detection otherwise only ever runs on first launch, so
+    // libraries installed later would never be picked up.
+    [RelayCommand]
+    private void DetectGamePaths()
+    {
+        var added = 0;
+        foreach (var p in GameLibraryScanner.ScanAll())
+        {
+            if (GamePaths.Contains(p, StringComparer.OrdinalIgnoreCase)) continue;
+            GamePaths.Add(p);
+            added++;
+        }
+        SaveStatus = added > 0
+            ? $"Detected {added} new game librar{(added == 1 ? "y" : "ies")} - remember to save"
+            : "No new game libraries found";
+    }
 
     [RelayCommand]
     private void AddThrottledProc()
@@ -118,30 +142,55 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void Save()
     {
-        try
-        {
-            _cfg.NicName = NicName;
-            _cfg.PingHost = PingHost;
-            _cfg.GameAffinityMask = Convert.ToInt64(GameAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
-            _cfg.FirefoxAffinityMask = Convert.ToInt64(FirefoxAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
-            _cfg.BgAffinityMask = Convert.ToInt64(BgAffinityHex.Replace("0x", "").Replace("0X", ""), 16);
-            _cfg.AlertGpuTempC = AlertGpuTempC;
-            _cfg.AlertVramPct = AlertVramPct;
-            _cfg.AlertGpuUtilPct = AlertGpuUtilPct;
-            _cfg.AlertCpuZonePct = AlertCpuZonePct;
-            _cfg.AlertSustainedTicks = AlertSustainedTicks;
-            _cfg.GamePaths = [.. GamePaths];
-            _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
-            _cfg.GameProfiles = [.. GameProfiles];
-            _cfg.SuspendDuringGame = [.. SuspendApps];
-            _cfg.StartMinimized = StartMinimized;
-            _cfg.StartWithWindows = StartWithWindows;
-            _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
-            _cfg.DisableGameDvrWhenPinning = DisableGameDvr;
-            _cfg.Save();
-            ApplyStartWithWindows(StartWithWindows);
-        }
-        catch { }
+        // Parse each mask independently - one bad hex string previously aborted
+        // the entire save silently, leaving the user to believe it succeeded
+        var warnings = new List<string>();
+        _cfg.NicName = NicName;
+        _cfg.PingHost = PingHost;
+        _cfg.GameAffinityMask    = ParseMask(GameAffinityHex,    _cfg.GameAffinityMask,    "game", warnings);
+        _cfg.FirefoxAffinityMask = ParseMask(FirefoxAffinityHex, _cfg.FirefoxAffinityMask, "media", warnings);
+        _cfg.BgAffinityMask      = ParseMask(BgAffinityHex,      _cfg.BgAffinityMask,      "background", warnings);
+        _cfg.AlertGpuTempC = AlertGpuTempC;
+        _cfg.AlertVramPct = AlertVramPct;
+        _cfg.AlertGpuUtilPct = AlertGpuUtilPct;
+        _cfg.AlertCpuZonePct = AlertCpuZonePct;
+        _cfg.AlertSustainedTicks = AlertSustainedTicks;
+        _cfg.GamePaths = [.. GamePaths];
+        _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
+        _cfg.GameProfiles = [.. GameProfiles];
+        _cfg.SuspendDuringGame = [.. SuspendApps];
+        _cfg.StartMinimized = StartMinimized;
+        _cfg.StartWithWindows = StartWithWindows;
+        _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
+        _cfg.DisableGameDvrWhenPinning = DisableGameDvr;
+        _cfg.AutoPinOnGameDetect = AutoPinOnGameDetect;
+        _cfg.LockGpuClocksDuringGame = LockGpuClocks;
+        _cfg.StopServicesDuringSession = [.. StopServicesText
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+        _cfg.Validate();
+        _cfg.Save();
+        LoadFromConfig();   // reflect sanitized values back into the form
+        ApplyStartWithWindows(StartWithWindows);
+        App.OptimizerService?.ApplyNetworkSettings();
+
+        SaveStatus = warnings.Count > 0
+            ? $"Saved at {DateTime.Now:HH:mm:ss} - {string.Join("; ", warnings)}"
+            : $"Saved at {DateTime.Now:HH:mm:ss}";
+    }
+
+    // Accepts "0x3FFF" or "3FFF"; keeps the previous value (with a warning) on
+    // anything unparsable or zero
+    private static long ParseMask(string hex, long fallback, string label, List<string> warnings)
+    {
+        var t = hex.Trim().Replace("0x", "", StringComparison.OrdinalIgnoreCase);
+        if (t.Length > 0 &&
+            long.TryParse(t, System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var mask) &&
+            mask != 0)
+            return mask;
+        warnings.Add($"invalid {label} mask kept previous value");
+        return fallback;
     }
 
     private static void ApplyStartWithWindows(bool enable)
@@ -192,5 +241,8 @@ public partial class SettingsViewModel : ObservableObject
         StartWithWindows = _cfg.StartWithWindows;
         AutoFlushStandby = _cfg.AutoFlushStandbyOnGameStart;
         DisableGameDvr = _cfg.DisableGameDvrWhenPinning;
+        AutoPinOnGameDetect = _cfg.AutoPinOnGameDetect;
+        LockGpuClocks = _cfg.LockGpuClocksDuringGame;
+        StopServicesText = string.Join(", ", _cfg.StopServicesDuringSession);
     }
 }

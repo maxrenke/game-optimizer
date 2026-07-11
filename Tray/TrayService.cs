@@ -31,7 +31,7 @@ public class TrayService : IDisposable
     private DispatcherQueueTimer? _timer;
     private readonly DispatcherQueue _dispatcher;
 
-    public bool PinEnabled { get; set; } = true;
+    public bool PinEnabled { get; set; } = false;   // pinning starts off; snapshot updates within 1s
     public bool WindowVisible { get; set; } = true;
     public string? CurrentGame { get; set; }
     public int GameCpuPct { get; set; }
@@ -75,7 +75,7 @@ public class TrayService : IDisposable
 
             var pinItem = new MenuFlyoutItem
             {
-                Text = "CPU Pinning: ON",
+                Text = "CPU Pinning: OFF",
                 Command = new RelayCommand(() => TogglePinRequested?.Invoke()),
             };
 

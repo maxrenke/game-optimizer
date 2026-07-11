@@ -47,6 +47,7 @@ public class OptimizerService : IDisposable
     private int _prevAlertCount;
     private int _reportCount = -1;   // cached; -1 = not yet counted
     private bool _gpuClocksLocked;
+    private bool _autoPinned;   // true while pinning was enabled by auto-pin, not the user
 
     // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
     private int[] _lastCoreData = [];
@@ -67,6 +68,7 @@ public class OptimizerService : IDisposable
         get => _pm.PinningEnabled;
         set
         {
+            _autoPinned = false;   // any explicit set overrides auto-pin tracking
             _pm.PinningEnabled = value;
             if (value)
             {
@@ -104,6 +106,8 @@ public class OptimizerService : IDisposable
     {
         _startTime = DateTime.Now;
         _cts = new CancellationTokenSource();
+        if (!IsElevated())
+            AddLog("[!] Running without admin - affinity, priority, and system tweaks will fail");
         SystemService.CheckStalePriority(AddLog);
         _sys.EnableGamingOptimizations(_cfg.StopServicesDuringSession);
         _pm.Scan();
@@ -255,6 +259,25 @@ public class OptimizerService : IDisposable
         if (newGames.Count > 0 && _cfg.AutoFlushStandbyOnGameStart)
             _ = Task.Run(FlushStandbyRam);
 
+        // Auto pinning: enable on a newly detected game, disable when the last
+        // game exits - but only if this instance enabled it. Manual toggles win:
+        // the PinningEnabled setter clears _autoPinned, so turning pinning off
+        // by hand mid-game stays off, and a manual-on is never auto-reverted.
+        if (_cfg.AutoPinOnGameDetect)
+        {
+            if (newGames.Count > 0 && !PinningEnabled)
+            {
+                PinningEnabled = true;
+                _autoPinned = true;
+                AddLog("[PIN] Auto-enabled - game detected");
+            }
+            else if (_autoPinned && _pm.ActiveGames.IsEmpty && PinningEnabled)
+            {
+                PinningEnabled = false;
+                AddLog("[PIN] Auto-disabled - game closed");
+            }
+        }
+
         // GPU clock lock follows game presence: pin on the first detected game,
         // release once none remain. Gated on the config flag.
         if (_cfg.LockGpuClocksDuringGame)
@@ -355,6 +378,41 @@ public class OptimizerService : IDisposable
         var gpuTask = GpuMonitor.GetDataAsync();
         await Task.WhenAll(cpuTask, gpuTask);
         return (await cpuTask, await gpuTask);
+    }
+
+    /// <summary>
+    /// Re-resolves the monitored NIC and ping host from the current config so
+    /// saved network settings take effect without restarting the service.
+    /// </summary>
+    public void ApplyNetworkSettings()
+    {
+        var resolved = NetworkMonitor.AutoDetect(_cfg.NicName);
+        if (resolved != _cfg.NicName)
+        {
+            AddLog($"[SYS] NIC '{_cfg.NicName}' unsuitable - monitoring '{resolved}' instead");
+            _cfg.NicName = resolved;
+        }
+        if (_net.NicName != resolved)
+        {
+            _net.NicName = resolved;
+            AddLog($"[SYS] Network monitor switched to '{resolved}'");
+        }
+        if (_latency.Host != _cfg.PingHost)
+        {
+            _latency.Host = _cfg.PingHost;
+            AddLog($"[SYS] Ping host set to '{_latency.Host}'");
+        }
+    }
+
+    private static bool IsElevated()
+    {
+        try
+        {
+            using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+            return new System.Security.Principal.WindowsPrincipal(id)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch { return false; }
     }
 
     private void AddLog(string msg)

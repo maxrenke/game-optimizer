@@ -11,7 +11,7 @@ public class LatencyMonitor
 {
     public const int HistorySize = 120;
 
-    private readonly string _host;
+    private string _host;
     private readonly int[] _history = new int[HistorySize];
     private int _idx;
     private int _prevMs = -1;
@@ -19,8 +19,18 @@ public class LatencyMonitor
 
     public LatencyMonitor(string host)
     {
-        _host = string.IsNullOrWhiteSpace(host) ? "1.1.1.1" : host.Trim();
+        _host = Normalize(host);
     }
+
+    /// <summary>Host pinged for each sample. Settable so config changes apply live.</summary>
+    public string Host
+    {
+        get => _host;
+        set => _host = Normalize(value);
+    }
+
+    private static string Normalize(string host) =>
+        string.IsNullOrWhiteSpace(host) ? "1.1.1.1" : host.Trim();
 
     /// <summary>Most recent successful round-trip time in ms; 0 before any reading.</summary>
     public int LastMs { get; private set; }

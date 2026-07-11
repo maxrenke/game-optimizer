@@ -16,7 +16,18 @@ public class NetworkMonitor
     // re-resolve when the cached adapter goes away (throws on query).
     private NetworkInterface? _nic;
 
-    public string NicName { get; set; }
+    private string _nicName = "";
+    public string NicName
+    {
+        get => _nicName;
+        set
+        {
+            if (_nicName == value) return;
+            _nicName = value;
+            _nic = null;          // force re-resolve against the new name
+            _prevRx = _prevTx = 0; // skip one delta - counters are per-adapter
+        }
+    }
 
     public int[] RxHistory => _rxHistory;
     public int[] TxHistory => _txHistory;

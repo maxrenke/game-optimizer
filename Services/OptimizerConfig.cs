@@ -72,6 +72,13 @@ public class OptimizerConfig
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;
 
+    /// <summary>
+    /// Turn CPU pinning on automatically when a game is detected and back off
+    /// when the last auto-pinned game exits. Manual toggles always win: turning
+    /// pinning off by hand while a game runs stops the automation for that game.
+    /// </summary>
+    public bool AutoPinOnGameDetect { get; set; } = false;
+
     /// <summary>Purge the Windows standby memory list each time a game is detected.</summary>
     public bool AutoFlushStandbyOnGameStart { get; set; } = false;
 
@@ -124,6 +131,22 @@ public class OptimizerConfig
 
         if (string.IsNullOrWhiteSpace(PingHost)) PingHost = "1.1.1.1";
         else PingHost = PingHost.Trim();
+
+        // Normalize throttle/service lists - entries typed with ".exe" or stray
+        // whitespace would otherwise never match a process or service name
+        ExtraThrottledProcs = ExtraThrottledProcs
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim()
+                .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+                .ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        StopServicesDuringSession = StopServicesDuringSession
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         // Normalize and prune per-game profiles
         GameProfiles = GameProfiles

@@ -125,6 +125,11 @@ public class OptimizerServiceWrapper(Services.OptimizerService inner)
         Task.Run(() => inner.FlushStandbyRam());
     }
 
+    public void ApplyNetworkSettings()
+    {
+        Task.Run(() => inner.ApplyNetworkSettings());
+    }
+
     public void Stop()
     {
         _ = inner.SaveReport();

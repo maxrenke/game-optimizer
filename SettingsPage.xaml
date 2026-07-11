@@ -48,6 +48,19 @@
                                   IsOn="{x:Bind ViewModel.DisableGameDvr, Mode=TwoWay}" />
                     <TextBlock Text="Disables Xbox background recording (GameDVR_Enabled, AppCaptureEnabled) while CPU pinning is active. Restored when pinning is turned off."
                                Style="{StaticResource HelpTextStyle}" />
+                    <ToggleSwitch Header="Auto-enable CPU pinning when a game is detected"
+                                  IsOn="{x:Bind ViewModel.AutoPinOnGameDetect, Mode=TwoWay}" />
+                    <TextBlock Text="Turns pinning on when a game launches and back off when it exits. Manual toggles always win - turning pinning off by hand keeps it off."
+                               Style="{StaticResource HelpTextStyle}" />
+                    <ToggleSwitch Header="Lock GPU clocks to max while a game runs"
+                                  IsOn="{x:Bind ViewModel.LockGpuClocks, Mode=TwoWay}" />
+                    <TextBlock Text="Pins NVIDIA graphics clocks via nvidia-smi to prevent P-state oscillation (microstutter). Reset when the game exits. No effect without an NVIDIA GPU."
+                               Style="{StaticResource HelpTextStyle}" />
+                    <TextBox Header="Services to stop during a session (comma-separated)"
+                             Text="{x:Bind ViewModel.StopServicesText, Mode=TwoWay}"
+                             PlaceholderText="WSearch, DiagTrack" />
+                    <TextBlock Text="Stopped when the optimizer starts and restarted on exit. Startup type is never changed. Applies at the next optimizer start."
+                               Style="{StaticResource HelpTextStyle}" />
                 </StackPanel>
             </Expander>
 
@@ -177,9 +190,13 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox PlaceholderText="C:\Games\..." Text="{x:Bind ViewModel.NewGamePath, Mode=TwoWay}" />
                         <Button Grid.Column="1" Content="Add" Command="{x:Bind ViewModel.AddGamePathCommand}" />
+                        <Button Grid.Column="2" Content="Detect Libraries"
+                                Command="{x:Bind ViewModel.DetectGamePathsCommand}"
+                                ToolTipService.ToolTip="Scan Steam, Epic, GOG, Ubisoft, and EA installs for game libraries" />
                     </Grid>
                 </StackPanel>
             </Expander>
@@ -271,8 +288,10 @@
                         Style="{StaticResource AccentButtonStyle}" />
                 <Button x:Name="SaveBackBtn" Content="Save and Back" Click="SaveBackBtn_Click" />
                 <Button x:Name="CancelBtn" Content="Cancel" Click="BackBtn_Click" />
+                <TextBlock Text="{x:Bind ViewModel.SaveStatus, Mode=OneWay}"
+                           VerticalAlignment="Center" FontSize="12" Foreground="#50C864" />
             </StackPanel>
-            <TextBlock Text="Settings take effect on next restart of the optimizer service."
+            <TextBlock Text="Settings apply immediately, except service stops and start-minimized (next optimizer start)."
                        Style="{StaticResource HelpTextStyle}" Opacity="0.5" />
 
             <!-- Danger zone -->

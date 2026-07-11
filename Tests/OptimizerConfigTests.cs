@@ -368,4 +368,34 @@ public class OptimizerConfigTests
         Assert.Equal("dropbox", loaded.SuspendDuringGame[0].ProcessName);
         Assert.False(loaded.SuspendDuringGame[0].Enabled);
     }
+
+    [Fact]
+    public void DefaultConfig_AutoPinOnGameDetect_IsFalse()
+    {
+        Assert.False(new OptimizerConfig().AutoPinOnGameDetect);
+    }
+
+    [Fact]
+    public void Validate_ExtraThrottledProcs_NormalizedAndDeduplicated()
+    {
+        var cfg = new OptimizerConfig
+        {
+            ExtraThrottledProcs = ["  Spotify.EXE ", "spotify", "", "Discord"],
+        };
+        cfg.Validate();
+        Assert.Equal(["spotify", "discord"], cfg.ExtraThrottledProcs);
+    }
+
+    [Fact]
+    public void Validate_StopServices_TrimmedAndDeduplicated()
+    {
+        var cfg = new OptimizerConfig
+        {
+            StopServicesDuringSession = [" WSearch ", "wsearch", "", "DiagTrack"],
+        };
+        cfg.Validate();
+        Assert.Equal(2, cfg.StopServicesDuringSession.Count);
+        Assert.Equal("WSearch", cfg.StopServicesDuringSession[0]);
+        Assert.Equal("DiagTrack", cfg.StopServicesDuringSession[1]);
+    }
 }
