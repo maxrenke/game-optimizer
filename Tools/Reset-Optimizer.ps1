@@ -65,6 +65,17 @@ try {
 }
 catch { Write-Host "  [FAIL] Win32PrioritySeparation: $($_.Exception.Message)" -ForegroundColor Red }
 
+# ── 1b. GlobalTimerResolutionRequests ───────────────────────────────────────
+try {
+    Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' `
+        -Name 'GlobalTimerResolutionRequests' -ErrorAction Stop
+    Write-Host '  [OK]   GlobalTimerResolutionRequests removed (reboot to apply)' -ForegroundColor Green
+}
+catch [System.Management.Automation.PSArgumentException] {
+    Write-Host '  [OK]   GlobalTimerResolutionRequests already unset' -ForegroundColor Green
+}
+catch { Write-Host "  [FAIL] GlobalTimerResolutionRequests: $($_.Exception.Message)" -ForegroundColor Red }
+
 # ── 2. SysMain service ──────────────────────────────────────────────────────
 try {
     Set-Service -Name 'SysMain' -StartupType Automatic
@@ -72,6 +83,24 @@ try {
     Write-Host '  [OK]   SysMain service set to Automatic and started' -ForegroundColor Green
 }
 catch { Write-Host "  [FAIL] SysMain: $($_.Exception.Message)" -ForegroundColor Red }
+
+# ── 2b. Restart session-stopped services + reset GPU clocks ─────────────────
+foreach ($svc in @('WSearch', 'DiagTrack')) {
+    try {
+        if ((Get-Service -Name $svc -ErrorAction Stop).Status -ne 'Running') {
+            Start-Service -Name $svc -ErrorAction SilentlyContinue
+        }
+        Write-Host "  [OK]   $svc running" -ForegroundColor Green
+    }
+    catch { Write-Host "  [FAIL] ${svc}: $($_.Exception.Message)" -ForegroundColor Red }
+}
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    try {
+        & nvidia-smi --reset-gpu-clocks *>$null
+        Write-Host '  [OK]   GPU clocks reset to dynamic' -ForegroundColor Green
+    }
+    catch { Write-Host "  [FAIL] GPU clock reset: $($_.Exception.Message)" -ForegroundColor Red }
+}
 
 # ── 3 & 4. Affinity + priority across all processes ─────────────────────────
 $affReset = 0; $prioReset = 0
@@ -102,7 +131,7 @@ $bgNames = @(
     'phoneexperiencehost', 'crossdeviceservice', 'malwarebytes', 'mbamservice',
     'hearthstonedecktracker', 'backgroundtaskhost', 'windowspackagemanagerserver',
     'hwinfo64', 'nahimicsvc32', 'nahimicsvc64', 'unigetui', 'appcontrol',
-    'dropbox', 'googledrivefs'
+    'dropbox', 'googledrivefs', 'microsoft.cmdpal.ui'
 )
 $cfgPath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'GamingOptimizer\config.json'
 if (Test-Path $cfgPath) {

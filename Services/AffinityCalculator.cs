@@ -19,8 +19,12 @@ public static class AffinityCalculator
             var all = (1L << total) - 1;
             return new CpuZones(all, all, all, total, "minimal");
         }
-        var bgCount = Math.Max(1, total / 8);
-        var mediaCount = Math.Max(1, total / 8);
+        // Reserve ~one SMT pair (1 physical core) per 16 threads, split between
+        // media and bg. On mainstream 8C/16T single-CCD parts this hands the
+        // game 7 of 8 physical cores instead of 6 - reserving two whole cores
+        // there costs more frametime than the background isolation saves.
+        var bgCount = Math.Max(1, total / 16);
+        var mediaCount = Math.Max(1, total / 16);
         if (total - bgCount - mediaCount < 2) { bgCount = 1; mediaCount = 1; }
 
         var bgMask    = BuildMask(total - bgCount, bgCount);

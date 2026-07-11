@@ -26,13 +26,13 @@ public class AffinityCalculatorTests
     }
 
     [Fact]
-    public void SixteenCores_GameGets12_Media2_Bg2()
+    public void SixteenCores_GameGets14_Media1_Bg1()
     {
         var z = AffinityCalculator.FromCoreCount(16);
         Assert.Equal(16, z.TotalCores);
-        Assert.Equal(12, BitCount(z.GameMask));
-        Assert.Equal(2, BitCount(z.MediaMask));
-        Assert.Equal(2, BitCount(z.BgMask));
+        Assert.Equal(14, BitCount(z.GameMask));
+        Assert.Equal(1, BitCount(z.MediaMask));
+        Assert.Equal(1, BitCount(z.BgMask));
     }
 
     [Fact]

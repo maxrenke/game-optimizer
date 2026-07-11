@@ -15,6 +15,12 @@ public class SystemService
     private const string PrioValue = "Win32PrioritySeparation";
     private const int GamingPrio = 26;
 
+    // Since Windows 10 2004, timeBeginPeriod only affects the calling process.
+    // This key restores legacy global behavior so a 1ms timer also reaches games
+    // that do not request it themselves. Read at boot - a reboot is required.
+    private const string GlobalTimerKey   = @"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
+    private const string GlobalTimerValue = "GlobalTimerResolutionRequests";
+
     // Game DVR / background capture - HKCU values that gate Xbox capture
     private const string DvrKey      = @"System\GameConfigStore";
     private const string DvrValue    = "GameDVR_Enabled";
@@ -23,6 +29,10 @@ public class SystemService
 
     private int? _originalPrio;
     private bool _sysMainStopped;
+    private readonly List<string> _stoppedServices = new();
+
+    private int? _origGlobalTimer;
+    private bool _globalTimerSet;
 
     private int? _origDvr;
     private int? _origCapture;
@@ -30,7 +40,7 @@ public class SystemService
 
     public event Action<string>? LogEntry;
 
-    public void EnableGamingOptimizations()
+    public void EnableGamingOptimizations(IEnumerable<string>? stopServices = null)
     {
         // Win32PrioritySeparation -> short fixed quanta, no foreground boost
         try
@@ -47,6 +57,7 @@ public class SystemService
 
         timeBeginPeriod(1);
         LogEntry?.Invoke("[SYS] Timer resolution set to 1ms");
+        EnsureGlobalTimerResolution();
 
         // Suspend SysMain (Superfetch) - useless on NVMe
         try
@@ -64,6 +75,29 @@ public class SystemService
             }
         }
         catch { }
+
+        // Stop the configured background services (StartType left untouched; they
+        // are restarted on teardown). Same stop-only, fully reversible model as
+        // SysMain above - never disabled.
+        if (stopServices is not null)
+        {
+            foreach (var name in stopServices)
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                try
+                {
+                    using var svc = new ServiceController(name.Trim());
+                    if (svc.StartType != ServiceStartMode.Disabled &&
+                        svc.Status == ServiceControllerStatus.Running)
+                    {
+                        _stoppedServices.Add(svc.ServiceName);
+                        Task.Run(() => { try { svc.Stop(); } catch { } });
+                        LogEntry?.Invoke($"[SYS] {svc.ServiceName} stopped (was {svc.StartType})");
+                    }
+                }
+                catch { } // unknown/inaccessible service - skip
+            }
+        }
     }
 
     public void DisableGamingOptimizations()
@@ -94,8 +128,70 @@ public class SystemService
             catch { }
         }
 
+        // Restart every service we stopped this session (idempotent if already running)
+        foreach (var name in _stoppedServices)
+        {
+            try
+            {
+                using var svc = new ServiceController(name);
+                if (svc.Status != ServiceControllerStatus.Running) svc.Start();
+                LogEntry?.Invoke($"[SYS] {name} restarted");
+            }
+            catch { }
+        }
+        _stoppedServices.Clear();
+
         // Always undo a Game DVR change on teardown/reset (no-op if not set)
         RestoreGameDvr();
+    }
+
+    /// <summary>
+    /// Sets <c>GlobalTimerResolutionRequests=1</c> so a 1ms timer reaches games
+    /// that do not call <c>timeBeginPeriod</c> themselves. The key is read at
+    /// boot, so this is a persistent tweak that takes effect on the next reboot
+    /// and is deliberately NOT reverted on normal teardown (reverting same-boot
+    /// would cancel the benefit before it ever applies). Use
+    /// <see cref="RestoreGlobalTimer"/> for an explicit reset. Needs admin.
+    /// </summary>
+    private void EnsureGlobalTimerResolution()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(GlobalTimerKey, writable: true);
+            if (key is null) return;
+            var cur = (int?)key.GetValue(GlobalTimerValue);
+            if (cur == 1)
+            {
+                LogEntry?.Invoke("[SYS] Global timer resolution already enabled");
+                return;
+            }
+            _origGlobalTimer = cur;
+            key.SetValue(GlobalTimerValue, 1, RegistryValueKind.DWord);
+            _globalTimerSet = true;
+            LogEntry?.Invoke("[SYS] Global timer resolution enabled (reboot required to take effect)");
+        }
+        catch { LogEntry?.Invoke("[SYS] Global timer resolution change failed (needs admin)"); }
+    }
+
+    /// <summary>
+    /// Restores <c>GlobalTimerResolutionRequests</c> to the value saved by
+    /// <see cref="EnsureGlobalTimerResolution"/>. Only meaningful within the
+    /// session that set it; the standalone Reset-Optimizer.ps1 covers the
+    /// cross-session case. A reboot is required for the change to take effect.
+    /// </summary>
+    public void RestoreGlobalTimer()
+    {
+        if (!_globalTimerSet) return;
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(GlobalTimerKey, writable: true);
+            if (key is null) return;
+            if (_origGlobalTimer.HasValue) key.SetValue(GlobalTimerValue, _origGlobalTimer.Value, RegistryValueKind.DWord);
+            else key.DeleteValue(GlobalTimerValue, throwOnMissingValue: false);
+            _globalTimerSet = false;
+            LogEntry?.Invoke("[SYS] Global timer resolution restored (reboot required)");
+        }
+        catch { }
     }
 
     /// <summary>

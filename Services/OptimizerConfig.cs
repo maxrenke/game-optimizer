@@ -41,15 +41,33 @@ public class OptimizerConfig
     public List<GameProfile> GameProfiles { get; set; } = [];
 
     /// <summary>
-    /// Background apps to fully suspend while a game runs. Defaults to common
-    /// cloud-sync clients, which are the main cause of mid-game disk stutter.
+    /// Background apps to fully suspend while a game runs (resumed when the game
+    /// ends or pinning is turned off). Defaults to common cloud-sync clients -
+    /// the main cause of mid-game disk stutter - plus on-demand launcher UIs
+    /// like the PowerToys Command Palette that are never needed mid-game.
     /// </summary>
     public List<SuspendApp> SuspendDuringGame { get; set; } =
     [
         new() { ProcessName = "onedrive",      Enabled = true },
         new() { ProcessName = "dropbox",       Enabled = true },
         new() { ProcessName = "googledrivefs", Enabled = true },
+        new() { ProcessName = "Microsoft.CmdPal.UI", Enabled = true },
     ];
+
+    /// <summary>
+    /// Services stopped for the duration of a session and restarted on teardown
+    /// (StartType is never changed - identical to the built-in SysMain handling).
+    /// Defaults to the Windows Search indexer and telemetry, both common sources
+    /// of mid-game disk/CPU spikes.
+    /// </summary>
+    public List<string> StopServicesDuringSession { get; set; } = ["WSearch", "DiagTrack"];
+
+    /// <summary>
+    /// Pin NVIDIA GPU clocks to maximum while a game runs (via nvidia-smi),
+    /// reset when it exits. Prevents GPU P-state oscillation - a microstutter
+    /// source - at the cost of higher idle clocks/heat during play.
+    /// </summary>
+    public bool LockGpuClocksDuringGame { get; set; } = true;
 
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;

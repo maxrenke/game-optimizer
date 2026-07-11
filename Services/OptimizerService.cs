@@ -46,6 +46,7 @@ public class OptimizerService : IDisposable
     private DateTime _startTime;
     private int _prevAlertCount;
     private int _reportCount = -1;   // cached; -1 = not yet counted
+    private bool _gpuClocksLocked;
 
     // Last WMI/GPU sample - updated every 3s, read every 1s for snapshots
     private int[] _lastCoreData = [];
@@ -104,7 +105,7 @@ public class OptimizerService : IDisposable
         _startTime = DateTime.Now;
         _cts = new CancellationTokenSource();
         SystemService.CheckStalePriority(AddLog);
-        _sys.EnableGamingOptimizations();
+        _sys.EnableGamingOptimizations(_cfg.StopServicesDuringSession);
         _pm.Scan();
         _pm.ThrottleBg();
         _pm.StartWmiWatcher();
@@ -123,6 +124,11 @@ public class OptimizerService : IDisposable
     private void Cleanup()
     {
         if (_sessions.Current is not null) _sessions.EndSession();
+        if (_gpuClocksLocked)
+        {
+            _gpuClocksLocked = false;
+            try { GpuControl.ResetClocksAsync().Wait(TimeSpan.FromSeconds(4)); } catch { }
+        }
         _sys.DisableGamingOptimizations();
         _pm.RestoreAll();
         _pm.Dispose();
@@ -150,7 +156,13 @@ public class OptimizerService : IDisposable
         _pm.ClearState();
 
         // Restore system settings: timer resolution, Win32PrioritySeparation, SysMain
+        if (_gpuClocksLocked)
+        {
+            _gpuClocksLocked = false;
+            try { GpuControl.ResetClocksAsync().Wait(TimeSpan.FromSeconds(4)); } catch { }
+        }
         _sys.DisableGamingOptimizations();
+        _sys.RestoreGlobalTimer();
 
         // Close any open session (no meaningful stats after a mid-session reset)
         if (_sessions.Current is not null) _sessions.EndSession();
@@ -242,6 +254,33 @@ public class OptimizerService : IDisposable
         }
         if (newGames.Count > 0 && _cfg.AutoFlushStandbyOnGameStart)
             _ = Task.Run(FlushStandbyRam);
+
+        // GPU clock lock follows game presence: pin on the first detected game,
+        // release once none remain. Gated on the config flag.
+        if (_cfg.LockGpuClocksDuringGame)
+        {
+            if (_pm.ActiveGames.Count > 0 && !_gpuClocksLocked)
+            {
+                _gpuClocksLocked = true;
+                _ = Task.Run(async () =>
+                {
+                    if (await GpuControl.LockClocksMaxAsync())
+                        AddLog("[GPU] Clocks locked to max - game active");
+                    else
+                        _gpuClocksLocked = false;   // lock failed; allow a retry next tick
+                });
+            }
+            else if (_pm.ActiveGames.Count == 0 && _gpuClocksLocked)
+            {
+                _gpuClocksLocked = false;
+                _ = Task.Run(async () =>
+                {
+                    await GpuControl.ResetClocksAsync();
+                    AddLog("[GPU] Clocks reset - no game active");
+                });
+            }
+        }
+
         if (_pm.ActiveGames.Count == 0 && _sessions.Current is not null)
             _sessions.EndSession();
 

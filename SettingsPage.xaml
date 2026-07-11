@@ -10,9 +10,10 @@
     Background="Transparent">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="16" Padding="24,16,24,24" MaxWidth="700">
+        <StackPanel Spacing="14" Padding="24,16,24,24" MaxWidth="700">
 
-            <Grid>
+            <!-- Header -->
+            <Grid Margin="0,0,0,2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -24,12 +25,16 @@
                         <TextBlock Text="Back" FontSize="13" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                <TextBlock Grid.Column="1" Text="Settings" Style="{StaticResource TitleTextBlockStyle}"
-                           Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Settings" Style="{StaticResource TitleTextBlockStyle}"/>
+                    <TextBlock Text="Tuning profile, thresholds, and game detection"
+                               Style="{StaticResource HelpTextStyle}" />
+                </StackPanel>
             </Grid>
 
             <!-- Behavior -->
-            <Expander Header="Behavior" IsExpanded="True">
+            <Expander Header="Behavior" IsExpanded="True"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
                     <ToggleSwitch Header="Start minimized to tray"
                                   IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
@@ -38,34 +43,37 @@
                     <ToggleSwitch Header="Flush standby RAM when a game launches"
                                   IsOn="{x:Bind ViewModel.AutoFlushStandby, Mode=TwoWay}" />
                     <TextBlock Text="Purges the Windows standby memory list so a game starts with more free RAM."
-                               FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                               Style="{StaticResource HelpTextStyle}" />
                     <ToggleSwitch Header="Disable Game DVR / background capture while pinning"
                                   IsOn="{x:Bind ViewModel.DisableGameDvr, Mode=TwoWay}" />
                     <TextBlock Text="Disables Xbox background recording (GameDVR_Enabled, AppCaptureEnabled) while CPU pinning is active. Restored when pinning is turned off."
-                               FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                               Style="{StaticResource HelpTextStyle}" />
                 </StackPanel>
             </Expander>
 
             <!-- Network -->
-            <Expander Header="Network Adapter" IsExpanded="True">
+            <Expander Header="Network Adapter" IsExpanded="True"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
                     <TextBox Header="NIC Name" Text="{x:Bind ViewModel.NicName, Mode=TwoWay}"
                              PlaceholderText="e.g. Ethernet 2" />
                     <TextBlock Text="Name from Get-NetAdapter. Leave blank to auto-detect."
-                               FontSize="11" Opacity="0.6" />
+                               Style="{StaticResource HelpTextStyle}" />
                     <TextBox Header="Ping host (latency/jitter)" Text="{x:Bind ViewModel.PingHost, Mode=TwoWay}"
                              PlaceholderText="e.g. 1.1.1.1" />
                     <TextBlock Text="Host pinged to measure latency and jitter. Default 1.1.1.1 (Cloudflare)."
-                               FontSize="11" Opacity="0.6" />
+                               Style="{StaticResource HelpTextStyle}" />
                 </StackPanel>
             </Expander>
 
             <!-- Affinity Masks -->
-            <Expander Header="CPU Affinity Masks" IsExpanded="True">
+            <Expander Header="CPU Affinity Masks" IsExpanded="True"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
-                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
                         Hex bitmasks. Each bit = one logical processor.
-                        Default: Ryzen 7 5800X3D (8c/16t) - Game 0x0FFF, Firefox/VLC 0x3000, Bg 0xC000.
+                        Default for an 8c/16t single-CCD CPU: Game 0x3FFF (cores 0-6),
+                        Media (FF/VLC) 0x4000, Background 0x8000 (both halves of core 7).
                     </TextBlock>
                     <TextBox Header="Game affinity mask (hex)" Text="{x:Bind ViewModel.GameAffinityHex, Mode=TwoWay}" />
                     <TextBox Header="Firefox+VLC affinity mask (hex)" Text="{x:Bind ViewModel.FirefoxAffinityHex, Mode=TwoWay}" />
@@ -74,9 +82,10 @@
             </Expander>
 
             <!-- Per-Game Profiles -->
-            <Expander Header="Per-Game Profiles" IsExpanded="False">
+            <Expander Header="Per-Game Profiles" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
-                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
                         Override CPU affinity and priority for specific games by process name.
                         A game with no profile uses the game affinity mask above at High priority.
                         Leave the affinity blank to keep the default mask but change only priority.
@@ -121,7 +130,8 @@
             </Expander>
 
             <!-- Alert Thresholds -->
-            <Expander Header="Alert Thresholds" IsExpanded="False">
+            <Expander Header="Alert Thresholds" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
                     <NumberBox Header="GPU temperature alert (°C)" Value="{x:Bind ViewModel.AlertGpuTempC, Mode=TwoWay}"
                                Minimum="50" Maximum="110" SpinButtonPlacementMode="Inline" />
@@ -137,9 +147,10 @@
             </Expander>
 
             <!-- Game Paths -->
-            <Expander Header="Game Library Paths" IsExpanded="False">
+            <Expander Header="Game Library Paths" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
-                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
                         Processes whose executable is inside one of these paths are treated as games
                         and receive High priority + game affinity.
                     </TextBlock>
@@ -174,11 +185,12 @@
             </Expander>
 
             <!-- Extra Throttled Procs -->
-            <Expander Header="Extra Background Processes to Throttle" IsExpanded="False">
+            <Expander Header="Extra Background Processes to Throttle" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
-                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
                         Additional process names (no .exe) to pin to the Background zone
-                        and set to BelowNormal priority when gaming.
+                        and set to Idle priority when gaming.
                     </TextBlock>
                     <ListView ItemsSource="{x:Bind ViewModel.ExtraThrottledProcs}" SelectionMode="None"
                               MaxHeight="120">
@@ -210,9 +222,10 @@
             </Expander>
 
             <!-- Pause Apps During Gameplay -->
-            <Expander Header="Pause Apps During Gameplay" IsExpanded="False">
+            <Expander Header="Pause Apps During Gameplay" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8" Padding="0,8,0,0">
-                    <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
                         These apps are fully suspended (frozen) while a game is running and
                         resumed when it closes - cloud-sync clients like OneDrive are the main
                         cause of mid-game disk stutter. Uncheck an entry to keep it in the list
@@ -252,6 +265,7 @@
             </Expander>
 
             <!-- Save / Back buttons -->
+            <Border Height="1" Background="{StaticResource HairlineBrush}" Margin="0,2,0,0" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Content="Save Settings" Command="{x:Bind ViewModel.SaveCommand}"
                         Style="{StaticResource AccentButtonStyle}" />
@@ -259,18 +273,18 @@
                 <Button x:Name="CancelBtn" Content="Cancel" Click="BackBtn_Click" />
             </StackPanel>
             <TextBlock Text="Settings take effect on next restart of the optimizer service."
-                       FontSize="11" Opacity="0.5" />
+                       Style="{StaticResource HelpTextStyle}" Opacity="0.5" />
 
             <!-- Danger zone -->
-            <Border CornerRadius="6" Padding="14,10" BorderThickness="1"
+            <Border CornerRadius="8" Padding="14,10" BorderThickness="1"
                     BorderBrush="#44FF4444">
                 <Border.Background>
                     <SolidColorBrush Color="#220A0A" />
                 </Border.Background>
                 <StackPanel Spacing="6">
-                    <TextBlock Text="DANGER ZONE" FontSize="10" FontWeight="SemiBold"
-                               CharacterSpacing="100" Foreground="#FF6666" Opacity="0.8" />
-                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap">
+                    <TextBlock Text="DANGER ZONE" Style="{StaticResource SectionHeaderStyle}"
+                               Foreground="#FF6666" Opacity="0.85" />
+                    <TextBlock Style="{StaticResource HelpTextStyle}" Opacity="0.7">
                         Immediately restores all process affinities and priorities to Windows defaults,
                         re-enables SysMain, and clears all pinning state. Use if the app has left
                         processes in a bad state.

@@ -24,578 +24,542 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-    <!-- ── Warm-up bar: thin indeterminate strip until the first sample lands ── -->
-    <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3" Margin="0"
-                 CornerRadius="0" Background="Transparent"
-                 Visibility="{x:Bind ViewModel.IsWarmingUp, Mode=OneWay,
-                              Converter={StaticResource BoolToVisibilityConverter}}" />
+        <!-- ── Warm-up bar: thin indeterminate strip until the first sample lands ── -->
+        <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3" Margin="0"
+                     CornerRadius="0" Background="Transparent"
+                     Visibility="{x:Bind ViewModel.IsWarmingUp, Mode=OneWay,
+                                  Converter={StaticResource BoolToVisibilityConverter}}" />
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
-        <StackPanel Spacing="5" Padding="10,6,10,6">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" IsScrollInertiaEnabled="True">
+            <StackPanel Spacing="8" Padding="12,10,12,10">
 
-            <!-- ── Status bar ─────────────────────────────────────── -->
-            <Border CornerRadius="6" Padding="10,6"
-                    BorderThickness="3,0,0,0"
-                    BorderBrush="{x:Bind ViewModel.IsGaming, Mode=OneWay, Converter={StaticResource BoolToGamingBrushConverter}}">
-                <Border.Background>
-                    <SolidColorBrush Color="#0F1117" Opacity="0.9" />
-                </Border.Background>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <FontIcon Glyph="{x:Bind ViewModel.IsGaming, Mode=OneWay,
-                            Converter={StaticResource BoolToGlyphConverter}}"
-                                  FontSize="16" VerticalAlignment="Center" />
-                        <TextBlock FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
-                            <Run Text="{x:Bind ViewModel.IsGaming, Mode=OneWay,
-                                Converter={StaticResource BoolToStatusTextConverter}}" />
-                        </TextBlock>
-                        <TextBlock Text="{x:Bind ViewModel.GameName, Mode=OneWay}"
-                                   FontSize="13" Opacity="0.85" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.UptimeText, Mode=OneWay}"
-                               FontFamily="Consolas" FontSize="12" Opacity="0.7"
-                               VerticalAlignment="Center" />
-                </Grid>
-            </Border>
-
-            <!-- ── CPU Pinning state banner ───────────────────────── -->
-            <Border CornerRadius="6" Padding="10,8" BorderThickness="1.5"
-                    Background="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBgConverter}}"
-                    BorderBrush="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBorderConverter}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE718;" FontSize="18"
-                                  Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock FontSize="13" FontWeight="Bold"
-                                       Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}">
-                                <Run Text="CPU AFFINITY PINNING  " />
-                                <Run FontSize="16"
-                                     Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToOnOffConverter}}"
-                                     Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
+                <!-- ── Status bar ─────────────────────────────────────── -->
+                <Border CornerRadius="8" Padding="12,9" BorderThickness="3,0,0,0"
+                        Background="{StaticResource CardBackgroundBrush}"
+                        BorderBrush="{x:Bind ViewModel.IsGaming, Mode=OneWay, Converter={StaticResource BoolToGamingBrushConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="{x:Bind ViewModel.IsGaming, Mode=OneWay,
+                                Converter={StaticResource BoolToGlyphConverter}}"
+                                      FontSize="16" VerticalAlignment="Center" />
+                            <TextBlock FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center">
+                                <Run Text="{x:Bind ViewModel.IsGaming, Mode=OneWay,
+                                    Converter={StaticResource BoolToStatusTextConverter}}" />
                             </TextBlock>
-                            <TextBlock FontSize="11" Opacity="0.6"
-                                       Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToTextConverter}}" />
+                            <TextBlock Text="{x:Bind ViewModel.GameName, Mode=OneWay}"
+                                       FontSize="13" Opacity="0.85" VerticalAlignment="Center" />
                         </StackPanel>
-                    </StackPanel>
-                    <ToggleButton Grid.Column="1" x:Name="PinBannerToggle"
-                                  IsChecked="{x:Bind ViewModel.PinningEnabled, Mode=OneWay}"
-                                  Click="PinToggle_Click" VerticalAlignment="Center">
-                        <TextBlock FontSize="12" FontWeight="SemiBold"
-                                   Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToOnOffConverter}}"
-                                   Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
-                    </ToggleButton>
-                </Grid>
-            </Border>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE823;" FontSize="11" Opacity="0.55" VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind ViewModel.UptimeText, Mode=OneWay}"
+                                       FontFamily="Consolas" FontSize="12" Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
-            <!-- ── CPU | GPU panels ────────────────────────────────── -->
-            <Grid ColumnSpacing="5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+                <!-- ── CPU Pinning state banner ───────────────────────── -->
+                <Border CornerRadius="8" Padding="12,9" BorderThickness="1.5"
+                        Background="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBgConverter}}"
+                        BorderBrush="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToBorderConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE718;" FontSize="18"
+                                      Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock FontSize="13" FontWeight="Bold"
+                                           Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}">
+                                    <Run Text="CPU AFFINITY PINNING  " />
+                                    <Run FontSize="16"
+                                         Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToOnOffConverter}}"
+                                         Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Opacity="0.6"
+                                           Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToTextConverter}}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1" x:Name="PinBannerToggle"
+                                      IsChecked="{x:Bind ViewModel.PinningEnabled, Mode=OneWay}"
+                                      Click="PinToggle_Click" VerticalAlignment="Center" MinWidth="64">
+                            <TextBlock FontSize="12" FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToOnOffConverter}}"
+                                       Foreground="{x:Bind ViewModel.PinningEnabled, Mode=OneWay, Converter={StaticResource PinToColorConverter}}" />
+                        </ToggleButton>
+                    </Grid>
+                </Border>
 
-                <!-- CPU Zones -->
-                <Border Grid.Column="0" CornerRadius="6" Padding="10,8"
-                        BorderThickness="1" BorderBrush="#18FFFFFF">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                    </Border.Background>
-                    <StackPanel Spacing="7">
-                        <TextBlock Text="CPU ZONES" FontSize="11" Opacity="0.6"
-                                   FontWeight="SemiBold" CharacterSpacing="100" />
+                <!-- ── CPU | GPU panels ────────────────────────────────── -->
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                        <!-- Game zone -->
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                    <!-- CPU Zones -->
+                    <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="CPU ZONES" Style="{StaticResource SectionHeaderStyle}" />
+
+                            <!-- Game zone -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="92"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="40"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Game 0-5" FontSize="12" VerticalAlignment="Center"
-                                           Foreground="{x:Bind ViewModel.IsGaming, Mode=OneWay,
-                                               Converter={StaticResource BoolToGamingBrushConverter}}" />
+                                <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="#CC80FF" />
+                                    <TextBlock Text="Game" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{x:Bind ViewModel.IsGaming, Mode=OneWay,
+                                                   Converter={StaticResource BoolToGamingBrushConverter}}" />
+                                </StackPanel>
                                 <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.GameCpuPct, Mode=OneWay}"
                                              Maximum="100" Height="8" CornerRadius="4"
                                              Foreground="{x:Bind ViewModel.GameCpuPct, Mode=OneWay,
                                                  Converter={StaticResource PctToColorConverter}}" />
                                 <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.GameCpuPct, Mode=OneWay,
                                                Converter={StaticResource PctToTextConverter}}"
-                                           FontFamily="Consolas" FontSize="12"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Style="{StaticResource MonoValueStyle}"
+                                           HorizontalAlignment="Right"
                                            Foreground="{x:Bind ViewModel.GameCpuPct, Mode=OneWay,
                                                Converter={StaticResource PctToColorConverter}}" />
                             </Grid>
-                        </Grid>
 
-                        <!-- Firefox+VLC zone -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="40"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="FF/VLC c6" FontSize="12" VerticalAlignment="Center"
-                                       Foreground="#A0C0FF" />
-                            <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.FfCpuPct, Mode=OneWay}"
-                                         Maximum="100" Height="8" CornerRadius="4"
-                                         Foreground="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
-                                             Converter={StaticResource PctToColorConverter}}" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
-                                           Converter={StaticResource PctToTextConverter}}"
-                                       FontFamily="Consolas" FontSize="12"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       Foreground="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
-                                           Converter={StaticResource PctToColorConverter}}" />
-                        </Grid>
+                            <!-- Media (Firefox+VLC) zone -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="92"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="#A0C0FF" />
+                                    <TextBlock Text="Media" FontSize="12" VerticalAlignment="Center" Foreground="#A0C0FF" />
+                                </StackPanel>
+                                <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.FfCpuPct, Mode=OneWay}"
+                                             Maximum="100" Height="8" CornerRadius="4"
+                                             Foreground="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
+                                                 Converter={StaticResource PctToColorConverter}}" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
+                                               Converter={StaticResource PctToTextConverter}}"
+                                           Style="{StaticResource MonoValueStyle}"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{x:Bind ViewModel.FfCpuPct, Mode=OneWay,
+                                               Converter={StaticResource PctToColorConverter}}" />
+                            </Grid>
 
-                        <!-- Background zone -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="40"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Bg/OS c7" FontSize="12" VerticalAlignment="Center"
-                                       Foreground="#808080" />
-                            <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.BgCpuPct, Mode=OneWay}"
-                                         Maximum="100" Height="8" CornerRadius="4"
-                                         Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
-                                             Converter={StaticResource PctToColorConverter}}" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
-                                           Converter={StaticResource PctToTextConverter}}"
-                                       FontFamily="Consolas" FontSize="12"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
-                                           Converter={StaticResource PctToColorConverter}}" />
-                        </Grid>
+                            <!-- Background zone -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="92"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                    <Ellipse Width="8" Height="8" Fill="#808080" />
+                                    <TextBlock Text="Background" FontSize="12" VerticalAlignment="Center" Foreground="#909090" />
+                                </StackPanel>
+                                <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.BgCpuPct, Mode=OneWay}"
+                                             Maximum="100" Height="8" CornerRadius="4"
+                                             Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
+                                                 Converter={StaticResource PctToColorConverter}}" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
+                                               Converter={StaticResource PctToTextConverter}}"
+                                           Style="{StaticResource MonoValueStyle}"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{x:Bind ViewModel.BgCpuPct, Mode=OneWay,
+                                               Converter={StaticResource PctToColorConverter}}" />
+                            </Grid>
 
-                        <!-- CPU game-zone 1-min history -->
-                        <TextBlock Text="1m history" FontSize="9" Opacity="0.4" CharacterSpacing="60" />
-                        <Canvas x:Name="CpuSparklineCanvas" Height="28" />
-                    </StackPanel>
-                </Border>
+                            <!-- CPU game-zone 1-min history -->
+                            <TextBlock Text="GAME ZONE · 1 MIN" Style="{StaticResource StatCaptionStyle}" Margin="0,2,0,0" />
+                            <Canvas x:Name="CpuSparklineCanvas" Height="28" />
+                        </StackPanel>
+                    </Border>
 
-                <!-- GPU Panel -->
-                <Border Grid.Column="1" CornerRadius="6" Padding="10,8"
-                        BorderThickness="1" BorderBrush="#18FFFFFF">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                    </Border.Background>
-                    <StackPanel Spacing="7">
-                        <TextBlock FontSize="11" Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100">
-                            <Run Text="GPU  " /><Run Text="{x:Bind ViewModel.GpuVendor, Mode=OneWay}" />
-                        </TextBlock>
+                    <!-- GPU Panel -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Style="{StaticResource SectionHeaderStyle}">
+                                <Run Text="GPU  " /><Run Text="{x:Bind ViewModel.GpuVendor, Mode=OneWay}" />
+                            </TextBlock>
 
-                        <!-- GPU Util -->
-                        <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                  Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="40"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Util" FontSize="12" VerticalAlignment="Center" Opacity="0.7" />
-                            <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.GpuUtil, Mode=OneWay}"
-                                         Maximum="100" Height="8" CornerRadius="4"
-                                         Foreground="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
-                                             Converter={StaticResource PctToColorConverter}}" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
-                                           Converter={StaticResource PctToTextConverter}}"
-                                       FontFamily="Consolas" FontSize="12"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       Foreground="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
-                                           Converter={StaticResource PctToColorConverter}}" />
-                        </Grid>
+                            <!-- GPU Util -->
+                            <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                      Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Util" Style="{StaticResource MetricCaptionStyle}" />
+                                <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.GpuUtil, Mode=OneWay}"
+                                             Maximum="100" Height="8" CornerRadius="4"
+                                             Foreground="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
+                                                 Converter={StaticResource PctToColorConverter}}" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
+                                               Converter={StaticResource PctToTextConverter}}"
+                                           Style="{StaticResource MonoValueStyle}"
+                                           HorizontalAlignment="Right"
+                                           Foreground="{x:Bind ViewModel.GpuUtil, Mode=OneWay,
+                                               Converter={StaticResource PctToColorConverter}}" />
+                            </Grid>
 
-                        <!-- VRAM -->
-                        <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                  Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="40"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="60"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="VRAM" FontSize="12" VerticalAlignment="Center" Opacity="0.7" />
-                            <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.VramPct, Mode=OneWay}"
-                                         Maximum="100" Height="8" CornerRadius="4"
-                                         Foreground="{x:Bind ViewModel.VramPct, Mode=OneWay,
-                                             Converter={StaticResource PctToColorConverter}}" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.VramText, Mode=OneWay}"
-                                       FontFamily="Consolas" FontSize="11"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                       Foreground="#80CCFF" />
-                        </Grid>
+                            <!-- VRAM -->
+                            <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                      Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="64"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="VRAM" Style="{StaticResource MetricCaptionStyle}" />
+                                <ProgressBar Grid.Column="1" Value="{x:Bind ViewModel.VramPct, Mode=OneWay}"
+                                             Maximum="100" Height="8" CornerRadius="4"
+                                             Foreground="{x:Bind ViewModel.VramPct, Mode=OneWay,
+                                                 Converter={StaticResource PctToColorConverter}}" />
+                                <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.VramText, Mode=OneWay}"
+                                           Style="{StaticResource MonoValueStyle}" FontSize="11"
+                                           HorizontalAlignment="Right" Foreground="#80CCFF" />
+                            </Grid>
 
-                        <!-- Temp + Power -->
-                        <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                  Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Temp" FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
-                                <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
-                                           Foreground="{x:Bind ViewModel.GpuTempC, Mode=OneWay,
-                                               Converter={StaticResource TempToColorConverter}}">
-                                    <Run Text="{x:Bind ViewModel.GpuTempC, Mode=OneWay}" /><Run Text="°C" />
-                                </TextBlock>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Pwr" FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
-                                <TextBlock FontFamily="Consolas" FontSize="12" VerticalAlignment="Center">
-                                    <Run Text="{x:Bind ViewModel.GpuPowerW, Mode=OneWay, Converter={StaticResource DoubleToF0Converter}}" />
-                                    <Run Text="/" />
-                                    <Run Text="{x:Bind ViewModel.GpuPowerLimW, Mode=OneWay, Converter={StaticResource DoubleToF0Converter}}" />
-                                    <Run Text="W" />
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
+                            <Border Height="1" Background="{StaticResource HairlineBrush}" Margin="0,2,0,1" />
 
-                        <!-- Clocks -->
-                        <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                  Converter={StaticResource BoolToVisibilityConverter}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Core" FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
-                                <TextBlock FontFamily="Consolas" FontSize="12" VerticalAlignment="Center">
-                                    <Run Text="{x:Bind ViewModel.GpuClkMhz, Mode=OneWay}" /><Run Text=" MHz" />
-                                </TextBlock>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Mem" FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
-                                <TextBlock FontFamily="Consolas" FontSize="12" VerticalAlignment="Center">
-                                    <Run Text="{x:Bind ViewModel.GpuMemClkMhz, Mode=OneWay}" /><Run Text=" MHz" />
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
+                            <!-- Temp + Power -->
+                            <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                      Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="Temp" Style="{StaticResource MetricCaptionStyle}" />
+                                    <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               Foreground="{x:Bind ViewModel.GpuTempC, Mode=OneWay,
+                                                   Converter={StaticResource TempToColorConverter}}">
+                                        <Run Text="{x:Bind ViewModel.GpuTempC, Mode=OneWay}" /><Run Text="°C" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="Power" Style="{StaticResource MetricCaptionStyle}" />
+                                    <TextBlock Style="{StaticResource MonoValueStyle}">
+                                        <Run Text="{x:Bind ViewModel.GpuPowerW, Mode=OneWay, Converter={StaticResource DoubleToF0Converter}}" /><Run Text="/" /><Run Text="{x:Bind ViewModel.GpuPowerLimW, Mode=OneWay, Converter={StaticResource DoubleToF0Converter}}" /><Run Text=" W" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
 
-                        <TextBlock Text="GPU monitor unavailable"
-                                   FontSize="12" Opacity="0.5"
-                                   Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                       Converter={StaticResource InvertBoolToVisibilityConverter}}" />
+                            <!-- Clocks -->
+                            <Grid Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                      Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="Core" Style="{StaticResource MetricCaptionStyle}" />
+                                    <TextBlock Style="{StaticResource MonoValueStyle}">
+                                        <Run Text="{x:Bind ViewModel.GpuClkMhz, Mode=OneWay}" /><Run Text=" MHz" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="Mem" Style="{StaticResource MetricCaptionStyle}" />
+                                    <TextBlock Style="{StaticResource MonoValueStyle}">
+                                        <Run Text="{x:Bind ViewModel.GpuMemClkMhz, Mode=OneWay}" /><Run Text=" MHz" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
 
-                        <!-- GPU util 1-min history -->
-                        <TextBlock Text="1m history" FontSize="9" Opacity="0.4" CharacterSpacing="60"
-                                   Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                       Converter={StaticResource BoolToVisibilityConverter}}" />
-                        <Canvas x:Name="GpuSparklineCanvas" Height="28"
-                                Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
-                                    Converter={StaticResource BoolToVisibilityConverter}}" />
-                    </StackPanel>
-                </Border>
-            </Grid>
+                            <TextBlock Text="GPU monitor unavailable"
+                                       FontSize="12" Opacity="0.5"
+                                       Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                           Converter={StaticResource InvertBoolToVisibilityConverter}}" />
 
-            <!-- ── Active Zone Processes ──────────────────────────── -->
-            <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                <Expander.Header>
-                    <TextBlock Text="ACTIVE ZONES" FontSize="11" Opacity="0.6"
-                               FontWeight="SemiBold" CharacterSpacing="100" />
-                </Expander.Header>
-                <Grid ColumnSpacing="8" Padding="0,4,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="GAME" FontSize="10" Opacity="0.6" FontWeight="SemiBold"
-                                   CharacterSpacing="100" Foreground="#CC80FF"/>
-                        <TextBlock Text="{x:Bind ViewModel.GameZoneProcs, Mode=OneWay}"
-                                   FontFamily="Consolas" FontSize="11" Foreground="#CC80FF"
-                                   TextWrapping="Wrap" Opacity="0.9"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock Text="MEDIA (FF/VLC)" FontSize="10" Opacity="0.6" FontWeight="SemiBold"
-                                   CharacterSpacing="100" Foreground="#A0C0FF"/>
-                        <TextBlock Text="{x:Bind ViewModel.MediaZoneProcs, Mode=OneWay}"
-                                   FontFamily="Consolas" FontSize="11" Foreground="#A0C0FF"
-                                   TextWrapping="Wrap" Opacity="0.9"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2" Spacing="4">
-                        <TextBlock Text="BG THROTTLED" FontSize="10" Opacity="0.6" FontWeight="SemiBold"
-                                   CharacterSpacing="100" Foreground="#808080"/>
-                        <TextBlock Text="{x:Bind ViewModel.BgZoneProcs, Mode=OneWay}"
-                                   FontFamily="Consolas" FontSize="11" Foreground="#909090"
-                                   TextWrapping="Wrap" Opacity="0.9"/>
-                    </StackPanel>
+                            <!-- GPU util 1-min history -->
+                            <TextBlock Text="UTIL · 1 MIN" Style="{StaticResource StatCaptionStyle}" Margin="0,2,0,0"
+                                       Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                           Converter={StaticResource BoolToVisibilityConverter}}" />
+                            <Canvas x:Name="GpuSparklineCanvas" Height="28"
+                                    Visibility="{x:Bind ViewModel.GpuAvailable, Mode=OneWay,
+                                        Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Border>
                 </Grid>
-            </Expander>
 
-            <!-- Session summary (visible when gaming) -->
-            <Border CornerRadius="6" Padding="10,7"
-                    BorderThickness="1" BorderBrush="#22FFFFFF"
-                    Visibility="{x:Bind ViewModel.IsGaming, Mode=OneWay,
-                        Converter={StaticResource BoolToVisibilityConverter}}">
-                <Border.Background>
-                    <SolidColorBrush Color="#0A140A" Opacity="0.95" />
-                </Border.Background>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="SESSION" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
-                        <TextBlock Text="{x:Bind ViewModel.SessionDuration, Mode=OneWay}" FontFamily="Consolas" FontSize="13"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="PEAK CPU" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
-                        <TextBlock Text="{x:Bind ViewModel.SessionPeakCpu, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
-                                   Foreground="#80CC80"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2" Spacing="2">
-                        <TextBlock Text="PEAK GPU" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
-                        <TextBlock Text="{x:Bind ViewModel.SessionPeakGpu, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
-                                   Foreground="#80CCFF"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="3" Spacing="2">
-                        <TextBlock Text="PEAK TEMP" FontSize="10" Opacity="0.6" CharacterSpacing="100" FontWeight="SemiBold"/>
-                        <TextBlock Text="{x:Bind ViewModel.SessionPeakTemp, Mode=OneWay}" FontFamily="Consolas" FontSize="13"
-                                   Foreground="#FFCC80"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- ── Network ─────────────────────────────────────────── -->
-            <Border CornerRadius="6" Padding="10,8"
-                    BorderThickness="1" BorderBrush="#18FFFFFF">
-                <Border.Background>
-                    <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                </Border.Background>
-                <StackPanel Spacing="5">
+                <!-- Session summary (visible when gaming) -->
+                <Border Style="{StaticResource CardStyle}" BorderBrush="#3380CC80"
+                        Visibility="{x:Bind ViewModel.IsGaming, Mode=OneWay,
+                            Converter={StaticResource BoolToVisibilityConverter}}">
                     <Grid>
-                        <TextBlock x:Name="NetHistoryLabel" Text="NETWORK  (30s history)" FontSize="11"
-                                   Opacity="0.6" FontWeight="SemiBold" CharacterSpacing="100"
-                                   VerticalAlignment="Center" />
-                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="3">
-                            <ToggleButton x:Name="Hist30sBtn" Tag="30" Content="30s" IsChecked="True"
-                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
-                            <ToggleButton x:Name="Hist2mBtn"  Tag="120" Content="2m"
-                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
-                            <ToggleButton x:Name="Hist5mBtn"  Tag="300" Content="5m"
-                                          Click="HistWindow_Click" FontSize="10" Padding="6,2" />
-                        </StackPanel>
-                    </Grid>
-                    <!-- Full-width graph (GlassWire hero layout) -->
-                    <Canvas x:Name="SparklineCanvas" Height="72" />
-                    <!-- Stats below the graph -->
-                    <Grid Margin="0,1,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="1">
-                            <TextBlock Text="DOWNLOAD" FontSize="9" Opacity="0.45"
-                                       CharacterSpacing="80" FontWeight="SemiBold"/>
-                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
-                                           Foreground="#00C8E8"
-                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
-                                               Converter={StaticResource RateValueConverter}}" />
-                                <TextBlock FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3"
-                                           Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
-                                               Converter={StaticResource RateUnitConverter}}" />
-                            </StackPanel>
-                            <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
-                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay,
-                                               Converter={StaticResource RateConverter}}" />
-                            </TextBlock>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="SESSION" Style="{StaticResource StatCaptionStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.SessionDuration, Mode=OneWay}" FontFamily="Consolas" FontSize="15"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="1" Margin="16,0,0,0">
-                            <TextBlock Text="UPLOAD" FontSize="9" Opacity="0.45"
-                                       CharacterSpacing="80" FontWeight="SemiBold"/>
-                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
-                                           Foreground="#606060"
-                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
-                                               Converter={StaticResource RateValueConverter}}" />
-                                <TextBlock FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3"
-                                           Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
-                                               Converter={StaticResource RateUnitConverter}}" />
-                            </StackPanel>
-                            <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
-                                <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay,
-                                               Converter={StaticResource RateConverter}}" />
-                            </TextBlock>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="PEAK CPU" Style="{StaticResource StatCaptionStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.SessionPeakCpu, Mode=OneWay}" FontFamily="Consolas" FontSize="15"
+                                       Foreground="#80CC80"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2">
+                            <TextBlock Text="PEAK GPU" Style="{StaticResource StatCaptionStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.SessionPeakGpu, Mode=OneWay}" FontFamily="Consolas" FontSize="15"
+                                       Foreground="#80CCFF"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Spacing="2">
+                            <TextBlock Text="PEAK TEMP" Style="{StaticResource StatCaptionStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.SessionPeakTemp, Mode=OneWay}" FontFamily="Consolas" FontSize="15"
+                                       Foreground="#FFCC80"/>
                         </StackPanel>
                     </Grid>
+                </Border>
 
-                    <!-- Latency / jitter (what actually predicts game smoothness) -->
-                    <Border Height="1" Background="#14FFFFFF" Margin="0,4,0,3" />
-                    <Grid ColumnSpacing="14">
+                <!-- ── Bottleneck (full-width, prominent) ──────────────── -->
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Spacing="1">
-                            <TextBlock Text="PING" FontSize="9" Opacity="0.45"
-                                       CharacterSpacing="80" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
-                                           Foreground="{x:Bind ViewModel.LatencyBrush, Mode=OneWay}"
-                                           Text="{x:Bind ViewModel.LatencyText, Mode=OneWay}" />
-                                <TextBlock Text="ms" FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                            </StackPanel>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="1">
-                            <TextBlock Text="JITTER" FontSize="9" Opacity="0.45"
-                                       CharacterSpacing="80" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
-                                           Opacity="0.75"
-                                           Text="{x:Bind ViewModel.JitterMs, Mode=OneWay}" />
-                                <TextBlock Text="ms" FontSize="11" Opacity="0.55"
-                                           VerticalAlignment="Bottom" Margin="0,0,0,3" />
-                            </StackPanel>
-                        </StackPanel>
-                        <Canvas Grid.Column="2" x:Name="LatencySparklineCanvas" Height="40"
-                                VerticalAlignment="Bottom" Margin="6,0,0,2" />
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- ── Bottleneck + Alert ──────────────────────────────── -->
-            <Grid ColumnSpacing="5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <Border CornerRadius="6" Padding="10,7"
-                        BorderThickness="1" BorderBrush="#18FFFFFF">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                    </Border.Background>
-                    <StackPanel Spacing="3">
-                        <TextBlock Text="BOTTLENECK" FontSize="11" Opacity="0.6"
-                                   FontWeight="SemiBold" CharacterSpacing="100" />
-                        <TextBlock Text="{x:Bind ViewModel.BottleneckLabel, Mode=OneWay}"
+                        <TextBlock Text="BOTTLENECK" Style="{StaticResource SectionHeaderStyle}"
+                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.BottleneckLabel, Mode=OneWay}"
                                    Foreground="{x:Bind ViewModel.BottleneckBrush, Mode=OneWay}"
-                                   FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+                                   FontFamily="Consolas" FontSize="13" TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- ── Network ─────────────────────────────────────────── -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="6">
+                        <Grid>
+                            <TextBlock x:Name="NetHistoryLabel" Text="NETWORK  (30s history)"
+                                       Style="{StaticResource SectionHeaderStyle}" VerticalAlignment="Center" />
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="3">
+                                <ToggleButton x:Name="Hist30sBtn" Tag="30" Content="30s" IsChecked="True"
+                                              Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                                <ToggleButton x:Name="Hist2mBtn"  Tag="120" Content="2m"
+                                              Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                                <ToggleButton x:Name="Hist5mBtn"  Tag="300" Content="5m"
+                                              Click="HistWindow_Click" FontSize="10" Padding="6,2" />
+                            </StackPanel>
+                        </Grid>
+                        <!-- Full-width graph (GlassWire hero layout) -->
+                        <Canvas x:Name="SparklineCanvas" Height="72" />
+                        <!-- Stats below the graph -->
+                        <Grid Margin="0,1,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="1">
+                                <TextBlock Text="DOWNLOAD" Style="{StaticResource StatCaptionStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                               Foreground="#00C8E8"
+                                               Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
+                                                   Converter={StaticResource RateValueConverter}}" />
+                                    <TextBlock FontSize="11" Opacity="0.55"
+                                               VerticalAlignment="Bottom" Margin="0,0,0,3"
+                                               Text="{x:Bind ViewModel.RxNow, Mode=OneWay,
+                                                   Converter={StaticResource RateUnitConverter}}" />
+                                </StackPanel>
+                                <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
+                                    <Run Text="peak " /><Run Text="{x:Bind ViewModel.RxPeak, Mode=OneWay,
+                                                   Converter={StaticResource RateConverter}}" />
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="1" Margin="16,0,0,0">
+                                <TextBlock Text="UPLOAD" Style="{StaticResource StatCaptionStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                               Foreground="#909090"
+                                               Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
+                                                   Converter={StaticResource RateValueConverter}}" />
+                                    <TextBlock FontSize="11" Opacity="0.55"
+                                               VerticalAlignment="Bottom" Margin="0,0,0,3"
+                                               Text="{x:Bind ViewModel.TxNow, Mode=OneWay,
+                                                   Converter={StaticResource RateUnitConverter}}" />
+                                </StackPanel>
+                                <TextBlock FontFamily="Consolas" FontSize="10" Opacity="0.4">
+                                    <Run Text="peak " /><Run Text="{x:Bind ViewModel.TxPeak, Mode=OneWay,
+                                                   Converter={StaticResource RateConverter}}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Latency / jitter (what actually predicts game smoothness) -->
+                        <Border Height="1" Background="{StaticResource HairlineBrush}" Margin="0,4,0,3" />
+                        <Grid ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="1">
+                                <TextBlock Text="PING" Style="{StaticResource StatCaptionStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                               Foreground="{x:Bind ViewModel.LatencyBrush, Mode=OneWay}"
+                                               Text="{x:Bind ViewModel.LatencyText, Mode=OneWay}" />
+                                    <TextBlock Text="ms" FontSize="11" Opacity="0.55"
+                                               VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="1">
+                                <TextBlock Text="JITTER" Style="{StaticResource StatCaptionStyle}" />
+                                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Consolas" FontSize="20" FontWeight="SemiBold"
+                                               Opacity="0.75"
+                                               Text="{x:Bind ViewModel.JitterMs, Mode=OneWay}" />
+                                    <TextBlock Text="ms" FontSize="11" Opacity="0.55"
+                                               VerticalAlignment="Bottom" Margin="0,0,0,3" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Canvas Grid.Column="2" x:Name="LatencySparklineCanvas" Height="40"
+                                    VerticalAlignment="Bottom" Margin="6,0,0,2" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="1" CornerRadius="6" Padding="10,7"
-                        BorderThickness="1" BorderBrush="#18FFFFFF">
-                    <Border.Background>
-                        <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                    </Border.Background>
-                    <StackPanel Spacing="3">
-                        <TextBlock Text="ALERTS" FontSize="11" Opacity="0.6"
-                                   FontWeight="SemiBold" CharacterSpacing="100" />
-                        <StackPanel Orientation="Horizontal" Spacing="6">
+                <!-- ── Alerts ──────────────────────────────────────────── -->
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="ALERTS" Style="{StaticResource SectionHeaderStyle}"
+                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <FontIcon Glyph="{x:Bind ViewModel.HasAlert, Mode=OneWay,
                                          Converter={StaticResource AlertToGlyphConverter}}"
                                       FontSize="14" VerticalAlignment="Center"
                                       Foreground="{x:Bind ViewModel.HasAlert, Mode=OneWay,
                                           Converter={StaticResource AlertToColorConverter}}" />
                             <TextBlock Text="{x:Bind ViewModel.AlertText, Mode=OneWay}"
-                                       FontSize="12" TextWrapping="Wrap"
+                                       FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                                        Foreground="{x:Bind ViewModel.HasAlert, Mode=OneWay,
                                            Converter={StaticResource AlertToColorConverter}}" />
                         </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- ── Active Zone Processes ──────────────────────────── -->
+                <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <TextBlock Text="ACTIVE ZONES" Style="{StaticResource SectionHeaderStyle}" />
+                    </Expander.Header>
+                    <Grid ColumnSpacing="10" Padding="0,4,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="GAME" Style="{StaticResource StatCaptionStyle}" Foreground="#CC80FF"/>
+                            <TextBlock Text="{x:Bind ViewModel.GameZoneProcs, Mode=OneWay}"
+                                       FontFamily="Consolas" FontSize="11" Foreground="#CC80FF"
+                                       TextWrapping="Wrap" Opacity="0.9"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="MEDIA (FF/VLC)" Style="{StaticResource StatCaptionStyle}" Foreground="#A0C0FF"/>
+                            <TextBlock Text="{x:Bind ViewModel.MediaZoneProcs, Mode=OneWay}"
+                                       FontFamily="Consolas" FontSize="11" Foreground="#A0C0FF"
+                                       TextWrapping="Wrap" Opacity="0.9"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Text="BG THROTTLED" Style="{StaticResource StatCaptionStyle}" Foreground="#909090"/>
+                            <TextBlock Text="{x:Bind ViewModel.BgZoneProcs, Mode=OneWay}"
+                                       FontFamily="Consolas" FontSize="11" Foreground="#909090"
+                                       TextWrapping="Wrap" Opacity="0.9"/>
+                        </StackPanel>
+                    </Grid>
+                </Expander>
+
+                <!-- ── Event Log ───────────────────────────────────────── -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="EVENT LOG" Style="{StaticResource SectionHeaderStyle}" />
+                        <ListView x:Name="LogListView"
+                                  ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
+                                  ItemTemplate="{StaticResource LogLineTemplate}"
+                                  MaxHeight="200"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="False"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  ScrollViewer.IsVerticalScrollChainingEnabled="True"
+                                  ScrollViewer.IsScrollInertiaEnabled="True">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
                     </StackPanel>
                 </Border>
-            </Grid>
 
-            <!-- ── Event Log ───────────────────────────────────────── -->
-            <Border CornerRadius="6" Padding="10,8"
-                    BorderThickness="1" BorderBrush="#18FFFFFF">
-                <Border.Background>
-                    <SolidColorBrush Color="#0F1117" Opacity="0.85" />
-                </Border.Background>
-                <StackPanel Spacing="4">
-                    <TextBlock Text="EVENT LOG" FontSize="11" Opacity="0.6"
-                               FontWeight="SemiBold" CharacterSpacing="100" />
-                    <ListView x:Name="LogListView"
-                              ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
-                              ItemTemplate="{StaticResource LogLineTemplate}"
-                              MaxHeight="200"
-                              SelectionMode="None"
-                              IsItemClickEnabled="False"
-                              ScrollViewer.VerticalScrollBarVisibility="Auto"
-                              ScrollViewer.IsVerticalScrollChainingEnabled="True"
-                              ScrollViewer.IsScrollInertiaEnabled="True">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="MinHeight" Value="0" />
-                                <Setter Property="Margin" Value="0" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                    </ListView>
-                </StackPanel>
-            </Border>
-
-        </StackPanel>
-    </ScrollViewer>
-
-    <!-- ── Footer (pinned to bottom, always visible) ──────── -->
-    <Grid Grid.Row="2" Padding="10,4,10,8">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-        </Grid.ColumnDefinitions>
-        <StackPanel Orientation="Horizontal" Spacing="6">
-            <Button x:Name="TrayBtn" Click="TrayBtn_Click">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <FontIcon Glyph="&#xE8BD;" FontSize="13" />
-                    <TextBlock Text="Hide to Tray" FontSize="12" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button x:Name="SettingsBtn" Click="SettingsBtn_Click">
-                <FontIcon Glyph="&#xE713;" FontSize="13" />
-            </Button>
-            <Button x:Name="ReportsBtn" Click="ReportsBtn_Click">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <FontIcon Glyph="&#xE8A5;" FontSize="13" />
-                    <TextBlock Text="{x:Bind ViewModel.ReportCount, Mode=OneWay,
-                                   Converter={StaticResource ReportCountConverter}}"
-                               FontSize="12" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-            <Button x:Name="FlushRamBtn" Click="FlushRamBtn_Click"
-                    ToolTipService.ToolTip="Purge the Windows standby memory list now">
-                <StackPanel Orientation="Horizontal" Spacing="5">
-                    <FontIcon Glyph="&#xEDAD;" FontSize="13" />
-                    <TextBlock Text="Flush RAM" FontSize="12" VerticalAlignment="Center" />
-                </StackPanel>
-            </Button>
-        </StackPanel>
-        <Button Grid.Column="2" x:Name="ExitBtn" Click="ExitBtn_Click" Style="{StaticResource AccentButtonStyle}">
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <FontIcon Glyph="&#xE711;" FontSize="13" />
-                <TextBlock Text="Exit" FontSize="12" VerticalAlignment="Center" />
             </StackPanel>
-        </Button>
-    </Grid>
+        </ScrollViewer>
 
+        <!-- ── Footer (pinned to bottom, always visible) ──────── -->
+        <Grid Grid.Row="2" Padding="12,6,12,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button x:Name="TrayBtn" Click="TrayBtn_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE8BD;" FontSize="13" />
+                        <TextBlock Text="Hide to Tray" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="SettingsBtn" Click="SettingsBtn_Click"
+                        ToolTipService.ToolTip="Settings">
+                    <FontIcon Glyph="&#xE713;" FontSize="13" />
+                </Button>
+                <Button x:Name="ReportsBtn" Click="ReportsBtn_Click"
+                        ToolTipService.ToolTip="Open session reports folder">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE8A5;" FontSize="13" />
+                        <TextBlock Text="{x:Bind ViewModel.ReportCount, Mode=OneWay,
+                                       Converter={StaticResource ReportCountConverter}}"
+                                   FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="FlushRamBtn" Click="FlushRamBtn_Click"
+                        ToolTipService.ToolTip="Purge the Windows standby memory list now">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xEDAD;" FontSize="13" />
+                        <TextBlock Text="Flush RAM" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <Button Grid.Column="2" x:Name="ExitBtn" Click="ExitBtn_Click" Style="{StaticResource AccentButtonStyle}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <FontIcon Glyph="&#xE711;" FontSize="13" />
+                    <TextBlock Text="Exit" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
     </Grid>
 </Page>
