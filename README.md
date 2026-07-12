@@ -22,7 +22,7 @@ Demotes background processes. Restores everything on exit.
 ---
 
 > [!NOTE]
-> **CPU pinning is opt-in and off by default.** The app monitors and reports with zero process modifications until you explicitly enable pinning via the toggle in the dashboard or system tray. When pinning is off, no process affinity, priority, or system setting is touched - guaranteed by 106 tests.
+> **CPU pinning is opt-in and off by default.** The app monitors and reports with zero process modifications until you explicitly enable pinning via the toggle in the dashboard or system tray (or turn on **Auto-pin** in Settings so it enables itself the moment a game launches). When pinning is off, no process affinity, priority, or system setting is touched - guaranteed by 154 tests.
 
 ---
 
@@ -36,9 +36,10 @@ When a game is detected, Gaming Optimizer instantly:
 | 🎯 **Isolates media** | Firefox and VLC get dedicated cores so they never steal game CPU time |
 | 🔇 **Demotes background** | OneDrive, iCloud, antivirus, etc. moved to BelowNormal priority and lowest disk I/O class |
 | ❄️ **Suspends cloud sync** | OneDrive, Dropbox, Google Drive fully suspended for the session - no mid-game disk stutter |
-| ⏱️ **Tightens timer resolution** | `timeBeginPeriod(1)` drops OS scheduling jitter from ~15ms to ~1ms |
+| ⏱️ **Tightens timer resolution** | `timeBeginPeriod(1)` drops OS scheduling jitter from ~15ms to ~1ms, plus a persistent global timer key so the low-latency timer reaches games that never request it themselves |
 | ⚙️ **Fixes scheduler quanta** | `Win32PrioritySeparation = 26` removes the foreground boost penalty |
-| 🗑️ **Stops SysMain** | Superfetch is pointless on NVMe and harmful under memory pressure |
+| 🗑️ **Stops SysMain and indexing** | Superfetch, Windows Search, and telemetry are pointless on NVMe and harmful under memory pressure - stopped for the session, restarted on exit |
+| 🔒 **Locks GPU clocks** | (NVIDIA, optional) pins graphics clocks to max via `nvidia-smi` to stop P-state oscillation - a common microstutter source |
 
 When the game closes, every change is reverted - processes restored, system settings back to Windows defaults.
 
@@ -59,7 +60,8 @@ When the game closes, every change is reverted - processes restored, system sett
 ### Automatic Detection
 
 - **Instant** via WMI `Win32_ProcessStartTrace` - no polling delay when a game starts
-- **Game library auto-scan** on first launch across Steam, Epic Games, GOG, Ubisoft Connect, EA App
+- **Game library auto-scan** on first launch across Steam, Epic Games, GOG, Ubisoft Connect, EA App - re-run anytime from Settings with **Detect Libraries**
+- **Auto-pin mode** (opt-in) - CPU pinning turns itself on the moment a game is detected and back off when it exits; a manual toggle always overrides the automation
 - **Intel hybrid CPU** - auto-detects P-cores vs E-cores via registry MHz sampling; games go to P-cores only
 - **1s fallback poll** catches anything WMI misses
 
@@ -81,9 +83,13 @@ When the game closes, every change is reverted - processes restored, system sett
 - Affinity masks, alert thresholds, game library paths - all configurable
 - **Per-game profiles** - different affinity and priority per game by process name
 - **Suspend Apps** - editable list of apps to freeze during gameplay, with per-entry toggle
+- **Auto-pin on game detect** - enable/disable the automatic pinning behavior above
+- **Lock GPU clocks during game** - toggle the NVIDIA max-clock lock
+- **Services to stop during a session** - editable comma-separated list (defaults to `WSearch, DiagTrack`)
 - **Disable Game DVR** - kills Xbox background recording while pinning is active
 - **Start with Windows** - registers a `RunLevel=Highest` scheduled task to bypass UAC at login
 - **Reset All** (Danger Zone) - restores every affinity and priority to Windows defaults instantly, without stopping the service
+- NIC and ping-host changes apply immediately, no restart needed; every save is validated and confirmed with a status line
 
 ---
 
@@ -210,10 +216,12 @@ Standalone emergency reset - restores process and system state to Windows defaul
 
 Resets in order:
 1. `Win32PrioritySeparation` → `2` (Windows default)
-2. SysMain → Automatic, started
-3. All non-default CPU affinities → all cores
-4. All BelowNormal / Idle priorities → Normal
-5. Suspended cloud-sync apps (and anything in your `config.json`) → resumed, I/O priority restored
+2. `GlobalTimerResolutionRequests` → removed (takes effect after a reboot)
+3. SysMain, WSearch, DiagTrack → Automatic, started
+4. GPU clocks → reset to dynamic (NVIDIA)
+5. All non-default CPU affinities → all cores
+6. All BelowNormal / Idle priorities → Normal
+7. Suspended cloud-sync apps (and anything in your `config.json`) → resumed, I/O priority restored
 
 > [!TIP]
 > If Gaming Optimizer is running with pinning **on** when you run this, it will re-apply its changes within a second. Turn pinning off or close the app first.
@@ -246,7 +254,7 @@ The app self-elevates via UAC. Run from an elevated terminal during development 
 dotnet test Tests/GameOptimizer.Tests.csproj -c Release
 ```
 
-106 tests across 13 files, targeting plain `net10.0-windows` without WinUI - CI runs them on `windows-latest` without a display.
+154 tests across 13 files, targeting plain `net10.0-windows` without WinUI - CI runs them on `windows-latest` without a display.
 
 ---
 
@@ -279,7 +287,8 @@ GameOptimizer/
 │   ├── GpuMonitor.cs            # nvidia-smi → rocm-smi → WDDM WMI fallback chain
 │   ├── NetworkMonitor.cs        # NIC byte counters → KB/s ring buffer (300 samples / 5 min)
 │   ├── LatencyMonitor.cs        # Ping-based RTT + RFC 3550 jitter estimation
-│   ├── SystemService.cs         # Win32PrioritySeparation, SysMain, timeBeginPeriod, GameDVR
+│   ├── SystemService.cs         # Win32PrioritySeparation, SysMain, service stops, timeBeginPeriod, GameDVR
+│   ├── GpuControl.cs            # NVIDIA clock lock/reset via nvidia-smi, gated on game presence
 │   ├── MemoryService.cs         # Standby memory list purge via NtSetSystemInformation
 │   ├── SessionTracker.cs        # Per-game session stats and report generation
 │   ├── BottleneckDetector.cs    # 5-sample rolling CPU vs GPU saturation heuristic
@@ -292,7 +301,7 @@ GameOptimizer/
 │   └── SettingsViewModel.cs     # Config editing, schtasks wiring for Start with Windows
 ├── Tray/
 │   └── TrayService.cs           # H.NotifyIcon.WinUI, Win32 HICON loaded via LoadImage
-├── Tests/                       # 106 xUnit tests across 13 files
+├── Tests/                       # 154 xUnit tests across 13 files
 └── Tools/                       # PowerShell setup and diagnostic scripts
 ```
 
@@ -321,12 +330,13 @@ Stop cancels the loop token, waits up to 10s, then walks every modified PID to r
 | System tray | H.NotifyIcon.WinUI 2.4 |
 | CPU sampling | PDH API (P/Invoke) |
 | GPU sampling | nvidia-smi CLI / rocm-smi CLI / WDDM WMI fallback |
+| GPU clock control | nvidia-smi CLI (`--lock-gpu-clocks` / `--reset-gpu-clocks`) |
 | Process events | WMI `Win32_ProcessStartTrace` / `Win32_ProcessStopTrace` |
 | Timer resolution | `winmm.dll timeBeginPeriod` |
 | Affinity | `System.Diagnostics.Process.ProcessorAffinity` |
 | Suspend / I/O priority | `ntdll.dll NtSuspendProcess`, `NtSetInformationProcess` |
 | Tray icon | `user32.dll LoadImage` (synchronous Win32 HICON) |
-| Tests | xUnit 2.9 / 106 tests |
+| Tests | xUnit 2.9 / 154 tests |
 | CI | GitHub Actions (`windows-latest`) |
 
 </details>
