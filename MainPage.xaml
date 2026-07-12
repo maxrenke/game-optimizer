@@ -498,7 +498,7 @@
                         <ListView x:Name="LogListView"
                                   ItemsSource="{x:Bind ViewModel.LogLines, Mode=OneWay}"
                                   ItemTemplate="{StaticResource LogLineTemplate}"
-                                  MaxHeight="200"
+                                  MaxHeight="400"
                                   SelectionMode="None"
                                   IsItemClickEnabled="False"
                                   ScrollViewer.VerticalScrollBarVisibility="Auto"

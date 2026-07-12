@@ -47,7 +47,7 @@ public partial class App : Application
         MainViewModel = new MainPageViewModel(UIDispatcher);
 
         Window = new MainWindow();
-        Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1000, 860));
+        Window.AppWindow.Resize(new Windows.Graphics.SizeInt32(1000, 1000));
         Window.Activate();
 
         if (Config.StartMinimized)
