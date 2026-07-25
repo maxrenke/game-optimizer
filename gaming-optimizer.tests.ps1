@@ -5,20 +5,27 @@
 #       Invoke-Pester gaming-optimizer.tests.ps1 -PassThru
 # =============================================================
 
-# Allow running directly as a script (not just via Invoke-Pester)
-if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -ge '5.0' })) {
-    Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0
-}
-Import-Module Pester -MinimumVersion 5.0 -Force
+# Bootstrap: only runs when the file is executed directly (pwsh -File).
+# When Pester re-invokes this file during discovery/run, the env var is already
+# set so this entire block — including the Pester import — is skipped.
+# Doing Import-Module Pester -Force inside the Pester runner resets its internal
+# state and causes 0 tests to be discovered, hence the guard around it.
+if (-not $env:GAMING_OPT_PESTER_RUNNING) {
+    if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -ge '5.0' })) {
+        Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.0
+    }
+    Import-Module Pester -MinimumVersion 5.0 -Force
 
-$config = New-PesterConfiguration
-$config.Run.Path = $PSCommandPath
-$config.Run.Exit = $true
-
-# Only bootstrap when run as a script, not when already inside Pester
-if ($MyInvocation.InvocationName -ne '.' -and $PSCmdlet -eq $null -and $null -eq (Get-Variable -Name 'Pester' -Scope Global -ErrorAction SilentlyContinue)) {
-    $result = Invoke-Pester -Configuration $config -PassThru
-    exit $result.FailedCount
+    $env:GAMING_OPT_PESTER_RUNNING = '1'
+    try {
+        $config              = New-PesterConfiguration
+        $config.Run.Path     = $PSCommandPath
+        $config.Run.PassThru = $true
+        $result = Invoke-Pester -Configuration $config
+        exit ($result ? $result.FailedCount : 1)
+    } finally {
+        Remove-Item Env:GAMING_OPT_PESTER_RUNNING -EA SilentlyContinue
+    }
 }
 
 # =============================================================
@@ -711,7 +718,7 @@ Describe "gaming-optimizer.ps1" {
     }
 
     # =============================================================
-    #  13. Tray mode flag
+    #  13. Tray mode flag and window restore
     # =============================================================
     Context "Tray mode flag" {
 
@@ -722,6 +729,62 @@ Describe "gaming-optimizer.ps1" {
         It "trayMode defaults to false when Mode param is unset" {
             # AST loader runs $script:trayMode = ($Mode -eq "tray") with $Mode = ""
             $script:trayMode | Should -BeFalse
+        }
+    }
+
+    Context "Window restore (_CWin / togglewindow)" {
+
+        It "_CWin P/Invoke definition includes SetForegroundWindow" {
+            $rawUtf8 | Should -Match 'SetForegroundWindow'
+        }
+
+        It "_CWin P/Invoke definition includes ShowWindow" {
+            $rawUtf8 | Should -Match 'ShowWindow'
+        }
+
+        It "_CWin P/Invoke definition includes GetConsoleWindow" {
+            $rawUtf8 | Should -Match 'GetConsoleWindow'
+        }
+
+        It "togglewindow dispatch uses SW_SHOW (5)" {
+            # SW_SHOW = 5 un-hides a hidden window; SW_RESTORE = 9 only un-minimizes
+            $rawUtf8 | Should -Match 'ShowWindow\s*\([^,]+,\s*5\)'
+        }
+
+        It "togglewindow dispatch does NOT use SW_RESTORE (9)" {
+            $rawUtf8 | Should -Not -Match 'ShowWindow\s*\([^,]+,\s*9\)'
+        }
+
+        It "togglewindow dispatch calls SetForegroundWindow" {
+            ($rawUtf8 -split "'togglewindow'\s*\{")[1] | Should -Match 'SetForegroundWindow'
+        }
+
+        It "togglewindow dispatch sets script:trayMode to false" {
+            ($rawUtf8 -split "'togglewindow'\s*\{")[1] | Should -Match '\$script:trayMode\s*=\s*\$false'
+        }
+
+        It "togglewindow dispatch resizes console buffer before Draw-Frame" {
+            ($rawUtf8 -split "'togglewindow'\s*\{")[1] | Should -Match 'BufferSize'
+        }
+
+        It "T key handler sets trayMode to true" {
+            ($rawUtf8 -split 'elseif\s*\(\$isT\)')[1] | Should -Match '\$script:trayMode\s*=\s*\$true'
+        }
+
+        It "T key handler hides console via ShowWindow" {
+            ($rawUtf8 -split 'elseif\s*\(\$isT\)')[1] | Should -Match 'ShowWindow'
+        }
+
+        It "T key handler updates WindowVisible to false" {
+            ($rawUtf8 -split 'elseif\s*\(\$isT\)')[1] | Should -Match 'WindowVisible\s*=\s*\$false'
+        }
+
+        It "trayComm hashtable has WindowVisible field" {
+            $rawUtf8 | Should -Match 'WindowVisible\s*='
+        }
+
+        It "tray icon double-click triggers togglewindow" {
+            $rawUtf8 | Should -Match 'add_DoubleClick.*togglewindow|DoubleClick.*togglewindow'
         }
     }
 

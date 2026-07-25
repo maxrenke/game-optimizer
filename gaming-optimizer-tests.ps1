@@ -498,13 +498,42 @@ T "Send-Toast called when new alerts fire in tray mode" (
     $src -match 'trayMode.*Send-Toast|Send-Toast.*alerts'
 )
 T "Update-Dashboard skipped in tray mode" (
-    $src -match "if\s*\(-not\s*\$script:trayMode\s*\)\s*\{\s*Update-Dashboard"
+    $src -match 'if\s*\(-not\s*\$script:trayMode\s*\)\s*\{\s*Update-Dashboard'
 )
 T "Console window hidden via ShowWindow in tray mode" (
     $src -match 'ShowWindow' -and $src -match 'trayMode'
 )
 T "Finally block has tray-mode conditional (no CursorVisible spam in tray)" (
     (Get-FinallyBlock $src) -match 'trayMode'
+)
+T "SetForegroundWindow declared in _CWin P/Invoke definition" (
+    $src -match 'SetForegroundWindow'
+)
+T "togglewindow uses SW_SHOW (5), not SW_RESTORE (9)" (
+    $src -match 'ShowWindow\s*\([^,]+,\s*5\)' -and
+    -not ($src -match 'ShowWindow\s*\([^,]+,\s*9\)')
+)
+T "togglewindow action present in tray comm dispatch" (
+    $src -match "'togglewindow'"
+)
+T "WindowVisible field in tray comm hashtable" (
+    $src -match 'WindowVisible\s*='
+)
+T "isT key handler present in main loop" (
+    $src -match '\$isT'
+)
+T "T key calls Start-TrayRunspace and hides window (ShowWindow 0)" (
+    ($src -split 'elseif\s*\(\$isT\)')[1] -match 'Start-TrayRunspace' -and
+    ($src -split 'elseif\s*\(\$isT\)')[1] -match 'ShowWindow'
+)
+T "Console buffer resize in togglewindow dispatch" (
+    ($src -split "'togglewindow'\s*\{")[1] -match 'BufferSize'
+)
+T "SetForegroundWindow called in togglewindow dispatch" (
+    ($src -split "'togglewindow'\s*\{")[1] -match 'SetForegroundWindow'
+)
+T "Tray icon double-click triggers togglewindow action" (
+    $src -match 'add_DoubleClick.*togglewindow|DoubleClick.*togglewindow'
 )
 
 
