@@ -116,11 +116,16 @@ Describe "gaming-optimizer.ps1" {
 
         function script:With-TempReport([scriptblock]$Body) {
             $td = "$env:TEMP\go_tests_$(Get-Random)"
-            Set-Variable -Name REPORT_DIR -Value $td -Scope Script
+            # Scope 1 = the calling It block. BeforeAll-defined variables shadow the
+            # script scope inside an It, so -Scope Script does NOT reach the
+            # $REPORT_DIR that the loaded functions actually resolve, and reports
+            # would be written to the real Documents\GamingOptimizer folder.
+            $prev = Get-Variable -Name REPORT_DIR -Scope 1 -ValueOnly -EA SilentlyContinue
+            Set-Variable -Name REPORT_DIR -Value $td -Scope 1
             try { & $Body $td }
             finally {
                 Remove-Item $td -Recurse -Force -EA SilentlyContinue
-                Set-Variable -Name REPORT_DIR -Value "$env:USERPROFILE\Documents\GamingOptimizer" -Scope Script
+                Set-Variable -Name REPORT_DIR -Value $prev -Scope 1
             }
         }
 
@@ -320,7 +325,9 @@ Describe "gaming-optimizer.ps1" {
             $script:bottleneck | Should -Be "gpu"
         }
 
-        It "CPU >= 75% and GPU < 75% -> 'cpu'" {
+        # NOTE: avoid '<' in It names - Pester treats <...> as a data placeholder
+        # and evaluates the contents as an expression.
+        It "CPU >= 75% and GPU under 75% -> 'cpu'" {
             Reset-State; $script:activeGames[1] = "Game"
             Fill-Bottleneck 80 @{ GpuUtil = 60 }
             $script:bottleneck | Should -Be "cpu"
@@ -332,7 +339,7 @@ Describe "gaming-optimizer.ps1" {
             $script:bottleneck | Should -Be "balanced"
         }
 
-        It "both < 55% -> 'headroom'" {
+        It "both under 55% -> 'headroom'" {
             Reset-State; $script:activeGames[1] = "Game"
             Fill-Bottleneck 30 @{ GpuUtil = 30 }
             $script:bottleneck | Should -Be "headroom"
@@ -707,7 +714,7 @@ Describe "gaming-optimizer.ps1" {
             { Send-Toast "GPU temp 85C — check cooling" } | Should -Not -Throw
         }
 
-        It "does not throw with XML special characters (& < >)" {
+        It "does not throw with XML special characters (amp, lt, gt)" {
             # Body is XML-escaped internally; must not crash on these chars
             { Send-Toast "VRAM 90% & rising <critical>" } | Should -Not -Throw
         }

@@ -23,7 +23,20 @@ jobs:
       - name: Run unit tests
         shell: pwsh
         run: |
-          $result = Invoke-Pester -Path gaming-optimizer.tests.ps1 -PassThru -OutputFormat NUnitXml -OutputFile TestResults.xml
+          # The test file self-bootstraps a nested Invoke-Pester when run via
+          # `pwsh -File`. Set its guard so this outer run discovers the tests
+          # instead of the bootstrap swallowing them (which reported 0 tests).
+          $env:GAMING_OPT_PESTER_RUNNING = '1'
+          Import-Module Pester -MinimumVersion 5.0
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = 'gaming-optimizer.tests.ps1'
+          $cfg.Run.PassThru = $true
+          # JUnitXml matches the java-junit reporter used in the next step
+          $cfg.TestResult.Enabled = $true
+          $cfg.TestResult.OutputFormat = 'JUnitXml'
+          $cfg.TestResult.OutputPath = 'TestResults.xml'
+          $result = Invoke-Pester -Configuration $cfg
+          "Pester $((Get-Module Pester).Version): $($result.PassedCount)/$($result.TotalCount) passed, $($result.FailedCount) failed"
           exit $result.FailedCount
 
       - name: Publish test results
