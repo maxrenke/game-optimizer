@@ -19,7 +19,20 @@ public partial class App : Application
     public static TrayService? TrayService { get; private set; }
     public static MainPageViewModel MainViewModel { get; private set; } = null!;
 
-    public App() { InitializeComponent(); }
+    public App()
+    {
+        InitializeComponent();
+
+        // Best-effort net for a managed crash: unfreeze suspended apps straight
+        // from the journal rather than going through the service, which would
+        // block for up to 10s waiting on the scan loop. Native failfast (the
+        // WinUI stowed exceptions that actually killed this app) never reaches
+        // here - SuspendJournal recovery on next launch is the real backstop.
+        UnhandledException += (_, _) =>
+        {
+            try { Services.SuspendJournal.RecoverOrphans(); } catch { }
+        };
+    }
 
     private static bool IsElevated() =>
         new WindowsPrincipal(WindowsIdentity.GetCurrent())

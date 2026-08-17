@@ -35,6 +35,24 @@ public class OptimizerConfig
     public List<string> ExtraThrottledProcs { get; set; } = [];
 
     /// <summary>
+    /// Processes pinned to the media zone (<see cref="FirefoxAffinityMask"/>) at
+    /// Normal priority while pinning is on - the second-monitor video/browser
+    /// set. These are deliberately NOT throttled to Idle like
+    /// <see cref="ExtraThrottledProcs"/>: a video player at Idle priority drops
+    /// frames. Names are matched case-insensitively without the ".exe" suffix.
+    /// </summary>
+    public List<string> MediaProcs { get; set; } =
+        ["firefox", "vlc", "mpv", "chrome", "msedge"];
+
+    /// <summary>
+    /// Sizes the media and background zones at a whole physical core each
+    /// instead of a single SMT sibling, for playing video on a second monitor
+    /// while gaming. Costs the game one physical core. Applied by the
+    /// "Recalculate zones" action in Settings, not retroactively.
+    /// </summary>
+    public bool ReserveFullCoreForMedia { get; set; } = false;
+
+    /// <summary>
     /// Optional per-game affinity/priority overrides. A game with no matching
     /// profile uses <see cref="GameAffinityMask"/> and High priority.
     /// </summary>
@@ -43,14 +61,21 @@ public class OptimizerConfig
     /// <summary>
     /// Background apps to fully suspend while a game runs (resumed when the game
     /// ends or pinning is turned off). Defaults to common cloud-sync clients -
-    /// the main cause of mid-game disk stutter - plus on-demand launcher UIs
-    /// like the PowerToys Command Palette that are never needed mid-game.
+    /// the main cause of mid-game disk stutter - plus companions that are never
+    /// needed mid-game: the PowerToys Command Palette, and Phone Link, whose
+    /// only cost when frozen is that phone notifications wait until you quit.
     /// </summary>
     public List<SuspendApp> SuspendDuringGame { get; set; } =
     [
         new() { ProcessName = "onedrive",      Enabled = true },
+        new() { ProcessName = "onedrive.sync.service", Enabled = true },
         new() { ProcessName = "dropbox",       Enabled = true },
         new() { ProcessName = "googledrivefs", Enabled = true },
+        new() { ProcessName = "megasync",      Enabled = true },
+        new() { ProcessName = "pcloud",        Enabled = true },
+        new() { ProcessName = "nextcloud",     Enabled = true },
+        new() { ProcessName = "syncthing",     Enabled = true },
+        new() { ProcessName = "phoneexperiencehost", Enabled = true },
         new() { ProcessName = "Microsoft.CmdPal.UI", Enabled = true },
     ];
 
@@ -141,6 +166,19 @@ public class OptimizerConfig
                 .ToLowerInvariant())
             .Distinct()
             .ToList();
+
+        MediaProcs = MediaProcs
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim()
+                .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+                .ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        // A name in both lists would flip between Normal/media and Idle/bg on
+        // alternating scans. The media zone wins - it is the explicit opt-in.
+        if (MediaProcs.Count > 0)
+            ExtraThrottledProcs = [.. ExtraThrottledProcs.Except(MediaProcs)];
 
         StopServicesDuringSession = StopServicesDuringSession
             .Where(s => !string.IsNullOrWhiteSpace(s))

@@ -109,6 +109,13 @@ public class OptimizerService : IDisposable
         if (!IsElevated())
             AddLog("[!] Running without admin - affinity, priority, and system tweaks will fail");
         SystemService.CheckStalePriority(AddLog);
+
+        // Unfreeze anything a previous run left suspended. Runs before the first
+        // scan so a stranded process is never mistaken for a live suspension.
+        var recovered = SuspendJournal.RecoverOrphans(AddLog);
+        if (recovered > 0)
+            AddLog($"[RECOVER] {recovered} process(es) unfrozen after an unclean shutdown");
+
         _sys.EnableGamingOptimizations(_cfg.StopServicesDuringSession);
         _pm.Scan();
         _pm.ThrottleBg();

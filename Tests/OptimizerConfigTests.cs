@@ -398,4 +398,38 @@ public class OptimizerConfigTests
         Assert.Equal("WSearch", cfg.StopServicesDuringSession[0]);
         Assert.Equal("DiagTrack", cfg.StopServicesDuringSession[1]);
     }
+
+    [Fact]
+    public void Validate_MediaProcs_NormalizedAndDeduplicated()
+    {
+        var cfg = new OptimizerConfig
+        {
+            MediaProcs = ["  MPV.EXE ", "mpv", "", "Firefox"],
+        };
+        cfg.Validate();
+        Assert.Equal(["mpv", "firefox"], cfg.MediaProcs);
+    }
+
+    [Fact]
+    public void Validate_ProcInBothMediaAndThrottleLists_StaysOnlyInMedia()
+    {
+        // Otherwise the scan loop flips it between Normal/media-zone and
+        // Idle/bg-zone on alternating ticks
+        var cfg = new OptimizerConfig
+        {
+            MediaProcs = ["vlc"],
+            ExtraThrottledProcs = ["VLC.exe", "spotify"],
+        };
+        cfg.Validate();
+        Assert.Equal(["spotify"], cfg.ExtraThrottledProcs);
+        Assert.Contains("vlc", cfg.MediaProcs);
+    }
+
+    [Fact]
+    public void DefaultConfig_MediaProcs_CoverCommonPlayers()
+    {
+        var cfg = new OptimizerConfig();
+        Assert.Contains("firefox", cfg.MediaProcs);
+        Assert.Contains("mpv", cfg.MediaProcs);
+    }
 }

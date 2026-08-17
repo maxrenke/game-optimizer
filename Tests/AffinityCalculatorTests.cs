@@ -36,6 +36,28 @@ public class AffinityCalculatorTests
     }
 
     [Fact]
+    public void MediaHeavy_SixteenCores_GivesMediaAndBgAWholePhysicalCore()
+    {
+        var z = AffinityCalculator.FromCoreCount(16, mediaHeavy: true);
+        Assert.Equal(12, BitCount(z.GameMask));
+        Assert.Equal(2, BitCount(z.MediaMask));
+        Assert.Equal(2, BitCount(z.BgMask));
+        // SMT siblings are enumerated adjacently, so a whole physical core is an
+        // even-aligned pair - a media zone straddling two cores defeats the point
+        Assert.Equal(0x3000L, z.MediaMask);
+        Assert.Equal(0xC000L, z.BgMask);
+    }
+
+    [Fact]
+    public void MediaHeavy_BelowTwelveThreads_FallsBackToSingleThreadZones()
+    {
+        var z = AffinityCalculator.FromCoreCount(8, mediaHeavy: true);
+        Assert.Equal(6, BitCount(z.GameMask));
+        Assert.Equal(1, BitCount(z.MediaMask));
+        Assert.Equal(1, BitCount(z.BgMask));
+    }
+
+    [Fact]
     public void Masks_AreDisjoint()
     {
         foreach (var count in new[] { 4, 8, 16 })
@@ -52,9 +74,15 @@ public class AffinityCalculatorTests
     {
         foreach (var count in new[] { 4, 8, 16 })
         {
-            var z = AffinityCalculator.FromCoreCount(count);
-            var allCores = (1L << count) - 1;
-            Assert.Equal(allCores, z.GameMask | z.MediaMask | z.BgMask);
+            foreach (var heavy in new[] { false, true })
+            {
+                var z = AffinityCalculator.FromCoreCount(count, heavy);
+                var allCores = (1L << count) - 1;
+                Assert.Equal(allCores, z.GameMask | z.MediaMask | z.BgMask);
+                Assert.Equal(0L, z.GameMask & z.MediaMask);
+                Assert.Equal(0L, z.GameMask & z.BgMask);
+                Assert.Equal(0L, z.MediaMask & z.BgMask);
+            }
         }
     }
 

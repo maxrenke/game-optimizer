@@ -6,32 +6,48 @@ public static class AffinityCalculator
 {
     public record CpuZones(long GameMask, long MediaMask, long BgMask, int TotalCores, string Source);
 
-    public static CpuZones Calculate()
+    /// <param name="mediaHeavy">
+    /// Widens the media and background zones to a whole physical core each,
+    /// for second-monitor video playback alongside a game. See
+    /// <see cref="FromCoreCount"/>.
+    /// </param>
+    public static CpuZones Calculate(bool mediaHeavy = false)
     {
         var total = Environment.ProcessorCount;
-        return TryDetectHybrid(total) ?? FromCoreCount(total);
+        // Hybrid parts already give media half the E-cores, which is a whole
+        // core's worth on every current layout - mediaHeavy adds nothing there.
+        return TryDetectHybrid(total) ?? FromCoreCount(total, mediaHeavy);
     }
 
-    public static CpuZones FromCoreCount(int total)
+    public static CpuZones FromCoreCount(int total, bool mediaHeavy = false)
     {
         if (total <= 2)
         {
             var all = (1L << total) - 1;
             return new CpuZones(all, all, all, total, "minimal");
         }
-        // Reserve ~one SMT pair (1 physical core) per 16 threads, split between
-        // media and bg. On mainstream 8C/16T single-CCD parts this hands the
-        // game 7 of 8 physical cores instead of 6 - reserving two whole cores
+        // Default: reserve ~one SMT pair (1 physical core) per 16 threads, split
+        // between media and bg. On mainstream 8C/16T single-CCD parts this hands
+        // the game 7 of 8 physical cores instead of 6 - reserving two whole cores
         // there costs more frametime than the background isolation saves.
-        var bgCount = Math.Max(1, total / 16);
-        var mediaCount = Math.Max(1, total / 16);
+        //
+        // mediaHeavy: give media and bg two logical processors each. With SMT,
+        // Windows enumerates siblings adjacently (CPU 2i / 2i+1 share physical
+        // core i), so two aligned bits is a whole physical core rather than one
+        // starved hyperthread. A 1440p/4K video decode plus browser compositing
+        // does not fit in a single SMT sibling; it stutters, and its spillover
+        // lands back on the game zone. Needs >= 12 threads to be worth 2 cores.
+        var perZone = mediaHeavy && total >= 12 ? 2 : Math.Max(1, total / 16);
+        var bgCount = perZone;
+        var mediaCount = perZone;
         if (total - bgCount - mediaCount < 2) { bgCount = 1; mediaCount = 1; }
 
         var bgMask    = BuildMask(total - bgCount, bgCount);
         var mediaMask = BuildMask(total - bgCount - mediaCount, mediaCount);
         var gameMask  = ((1L << total) - 1) & ~bgMask & ~mediaMask;
 
-        return new CpuZones(gameMask, mediaMask, bgMask, total, $"auto ({total} cores)");
+        var label = mediaHeavy ? $"media-heavy ({total} cores)" : $"auto ({total} cores)";
+        return new CpuZones(gameMask, mediaMask, bgMask, total, label);
     }
 
     private static CpuZones? TryDetectHybrid(int total)

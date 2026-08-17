@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Configurable media zone: `MediaProcs` replaces the hardcoded firefox/vlc pair,
+  so mpv, Chrome, Edge, or any second-monitor player gets the media zone at
+  Normal priority instead of falling through to the game zone
+- "Reserve a full physical core for media" option, for watching video on a second
+  monitor while gaming: sizes the media and background zones at a whole physical
+  core (an SMT sibling pair) each rather than one starved hyperthread
+- "Recalculate zones for this CPU" action in Settings - zone detection previously
+  only ever ran when the config file was first created
 - GPU clock lock (NVIDIA): pins graphics clocks to max via `nvidia-smi` while a
   game runs, resets on exit; configurable in Settings
 - Stop configurable services (default `WSearch`, `DiagTrack`) for the session,
@@ -20,6 +28,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dashboard and Settings visual refresh: shared card/typography styles
 
 ### Changed
+- Hardware monitors (HWiNFO, CapFrameX, RTSS) are no longer throttled to the
+  background zone - pinning a sampler to Idle priority on one core made it miss
+  polls and corrupt the frametime data used to judge whether tuning helped
+- Storefront and companion UIs (steamwebhelper, Playnite, WowUp, U.GG, Everything,
+  Riot Client) throttle to the background zone while a game runs
+- Cloud-sync defaults for pause-during-gameplay extended to Syncthing, MEGA,
+  pCloud, Nextcloud, and the OneDrive ListSync service
+- Phone Link (`phoneexperiencehost`) moved from throttled to paused-during-
+  gameplay - it idles around 700 MB and freezing it only defers phone
+  notifications until the game closes. `crossdeviceservice` stays throttled:
+  it is a separate package backing Nearby Share and camera streaming
+- A process listed in both the media and throttle lists now stays in the media
+  zone instead of oscillating between Normal and Idle on alternating scans
 - Hybrid CPU zone split reserves one SMT pair per 16 threads instead of 8 -
   games keep more physical cores on mainstream 8C/16T parts
 - Settings save no longer discards all changes when one affinity hex is
@@ -29,7 +50,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   DiagTrack, and resets GPU clocks
 
 ### Fixed
-- Default window height increased so the event log isn't cut off
+- Suspended apps are no longer stranded frozen by a crash. Every cleanup path
+  (`ReleasePinning`, `ResumeAllSuspended`, `Dispose`) needed managed code to run
+  at shutdown, and a WinUI stowed exception (`0xC000027B`) terminates the process
+  without running any of it - `NtSuspendProcess` is not tied to the caller's
+  lifetime, so Windows never unfroze them. Suspensions are now journalled to
+  `suspended.json` beside the config and recovered on next launch. Entries store
+  the process creation time as well as the PID, so a recycled PID is skipped
+  rather than resuming an unrelated process
+- A suspend is skipped entirely when the process start time cannot be read,
+  since such an entry could not be verified during recovery
 - Running without admin now logs a visible warning instead of failing silently
 
 ### Performance

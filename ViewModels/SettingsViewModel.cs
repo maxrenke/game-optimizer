@@ -33,6 +33,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial bool AutoPinOnGameDetect { get; set; } = false;
     [ObservableProperty] public partial bool LockGpuClocks { get; set; } = true;
     [ObservableProperty] public partial string StopServicesText { get; set; } = "";
+    [ObservableProperty] public partial bool ReserveFullCoreForMedia { get; set; } = false;
 
     /// <summary>Feedback line under the save buttons ("Saved at ...", warnings).</summary>
     [ObservableProperty] public partial string SaveStatus { get; set; } = "";
@@ -41,10 +42,12 @@ public partial class SettingsViewModel : ObservableObject
     public ObservableCollection<string> ExtraThrottledProcs { get; } = [];
     public ObservableCollection<GameProfile> GameProfiles { get; } = [];
     public ObservableCollection<SuspendApp> SuspendApps { get; } = [];
+    public ObservableCollection<string> MediaProcs { get; } = [];
 
     [ObservableProperty] public partial string NewGamePath { get; set; } = "";
     [ObservableProperty] public partial string NewThrottledProc { get; set; } = "";
     [ObservableProperty] public partial string NewSuspendApp { get; set; } = "";
+    [ObservableProperty] public partial string NewMediaProc { get; set; } = "";
 
     // ── Per-game profile add form ──────────────────────────────
     public string[] PriorityOptions { get; } = ["Normal", "AboveNormal", "High"];
@@ -96,6 +99,36 @@ public partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private void RemoveThrottledProc(string proc) => ExtraThrottledProcs.Remove(proc);
+
+    [RelayCommand]
+    private void AddMediaProc()
+    {
+        var name = NewMediaProc.Trim()
+            .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+            .ToLowerInvariant();
+        if (name.Length == 0 || MediaProcs.Contains(name)) return;
+        MediaProcs.Add(name);
+        NewMediaProc = "";
+    }
+
+    [RelayCommand]
+    private void RemoveMediaProc(string proc) => MediaProcs.Remove(proc);
+
+    /// <summary>
+    /// Recomputes the three affinity masks for this CPU and writes them into the
+    /// form. Needed because zone detection otherwise only ever runs when the
+    /// config file is first created, so toggling
+    /// <see cref="ReserveFullCoreForMedia"/> would have no effect.
+    /// </summary>
+    [RelayCommand]
+    private void RecalculateZones()
+    {
+        var zones = AffinityCalculator.Calculate(ReserveFullCoreForMedia);
+        GameAffinityHex    = $"0x{zones.GameMask:X}";
+        FirefoxAffinityHex = $"0x{zones.MediaMask:X}";
+        BgAffinityHex      = $"0x{zones.BgMask:X}";
+        SaveStatus = $"Zones recalculated - {zones.Source} - remember to save";
+    }
 
     [RelayCommand]
     private void AddProfile()
@@ -159,6 +192,8 @@ public partial class SettingsViewModel : ObservableObject
         _cfg.ExtraThrottledProcs = [.. ExtraThrottledProcs];
         _cfg.GameProfiles = [.. GameProfiles];
         _cfg.SuspendDuringGame = [.. SuspendApps];
+        _cfg.MediaProcs = [.. MediaProcs];
+        _cfg.ReserveFullCoreForMedia = ReserveFullCoreForMedia;
         _cfg.StartMinimized = StartMinimized;
         _cfg.StartWithWindows = StartWithWindows;
         _cfg.AutoFlushStandbyOnGameStart = AutoFlushStandby;
@@ -237,6 +272,9 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var p in _cfg.GameProfiles) GameProfiles.Add(p);
         SuspendApps.Clear();
         foreach (var a in _cfg.SuspendDuringGame) SuspendApps.Add(a);
+        MediaProcs.Clear();
+        foreach (var m in _cfg.MediaProcs) MediaProcs.Add(m);
+        ReserveFullCoreForMedia = _cfg.ReserveFullCoreForMedia;
         StartMinimized = _cfg.StartMinimized;
         StartWithWindows = _cfg.StartWithWindows;
         AutoFlushStandby = _cfg.AutoFlushStandbyOnGameStart;

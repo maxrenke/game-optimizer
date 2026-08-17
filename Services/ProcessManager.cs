@@ -19,14 +19,26 @@ public class ProcessManager : IDisposable
         "quicksfv","sfv","md5","hashcheck"
     };
 
+    // Deliberately excludes hardware monitors (HWiNFO, CapFrameX, RTSS): pinning
+    // a sampler to Idle priority on one core makes it miss polls, which corrupts
+    // the very frametime/hitch data used to judge whether any of this helped.
     private static readonly string[] BuiltInBgProcs =
     [
-        "onedrive","icloudckks","iclouddrive","icloudservices","icloudhome",
-        "phoneexperiencehost","crossdeviceservice",
+        "onedrive","onedrive.sync.service",
+        "icloudckks","iclouddrive","icloudservices","icloudhome",
+        // phoneexperiencehost (Phone Link) is in SuspendDuringGame instead - it
+        // idles at ~700 MB and freezing it only defers phone notifications.
+        // crossdeviceservice stays throttled: it is a separate package backing
+        // Nearby Share and camera streaming, not just Phone Link.
+        "crossdeviceservice",
         "malwarebytes","mbamservice","hearthstonedecktracker",
         "backgroundtaskhost","windowspackagemanagerserver",
-        "hwinfo64","nahimicsvc32","nahimicsvc64",
-        "unigetui","appcontrol"
+        "nahimicsvc32","nahimicsvc64",
+        "unigetui","appcontrol",
+        // Storefront/companion UIs: all Electron or CEF, all idle-but-chatty
+        // while a game runs, none needed until the player alt-tabs back out.
+        "steamwebhelper","epicwebhelper","playnite.desktopapp",
+        "wowup","u.gg","everything","riotclientservices",
     ];
 
     private readonly OptimizerConfig _cfg;
@@ -46,6 +58,9 @@ public class ProcessManager : IDisposable
 
     // PIDs this instance has suspended; resumed when the game ends / pinning off
     private readonly ConcurrentDictionary<int, string> _suspendedPids = new();
+
+    // Disk mirror of _suspendedPids so a crash cannot strand a frozen process
+    private readonly SuspendJournal _journal = new();
 
     public IReadOnlyList<string> SuspendedProcessNames => [.. _suspendedPids.Values.Distinct()];
 
@@ -73,10 +88,25 @@ public class ProcessManager : IDisposable
 
     private bool IsBgProc(string name)
     {
+        // Media wins over bg so an entry in both lists never oscillates between
+        // Normal/media-zone and Idle/bg-zone on alternating scans.
+        if (IsMediaProc(name)) return false;
         foreach (var b in BuiltInBgProcs)
             if (b.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
         foreach (var b in _cfg.ExtraThrottledProcs)
             if (string.Equals(b, name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True for a process that belongs in the media zone. Config-driven so the
+    /// second-monitor player (mpv, Chrome, a stream client) is covered without
+    /// a rebuild - it was previously hardcoded to firefox and vlc.
+    /// </summary>
+    private bool IsMediaProc(string name)
+    {
+        foreach (var m in _cfg.MediaProcs)
+            if (string.Equals(m, name, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
@@ -106,9 +136,8 @@ public class ProcessManager : IDisposable
             var name = e.NewEvent["ProcessName"]?.ToString()?.Replace(".exe", "", StringComparison.OrdinalIgnoreCase) ?? "";
             var pid  = Convert.ToInt32(e.NewEvent["ProcessID"]);
 
-            // Check firefox/vlc immediately
-            if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) ||
-                name.Equals("vlc", StringComparison.OrdinalIgnoreCase))
+            // Check media processes immediately
+            if (IsMediaProc(name))
             {
                 if (PinningEnabled)
                 {
@@ -175,7 +204,7 @@ public class ProcessManager : IDisposable
         var newGames = new List<string>();
         var procs = SafeGetProcesses();
         var alive = new HashSet<int>(procs.Length);
-        List<(int Pid, string Name)>? suspendCandidates = null;
+        List<(int Pid, string Name, long? StartTicks)>? suspendCandidates = null;
 
         HashSet<string>? suspendNames = null;
         if (PinningEnabled)
@@ -197,10 +226,8 @@ public class ProcessManager : IDisposable
 
                 if (PinningEnabled)
                 {
-                    // Pin new firefox + vlc (fallback for when WMI start event is missed)
-                    if ((name.Equals("firefox", StringComparison.OrdinalIgnoreCase) ||
-                         name.Equals("vlc", StringComparison.OrdinalIgnoreCase)) &&
-                        !_appliedMediaZone.ContainsKey(pid))
+                    // Pin new media procs (fallback for when the WMI start event is missed)
+                    if (IsMediaProc(name) && !_appliedMediaZone.ContainsKey(pid))
                     {
                         ApplyMediaZone(proc);
                         _appliedMediaZone[pid] = name;
@@ -209,7 +236,8 @@ public class ProcessManager : IDisposable
 
                     if (suspendNames is not null && suspendNames.Contains(name) &&
                         pid != Environment.ProcessId)
-                        (suspendCandidates ??= []).Add((pid, name));
+                        (suspendCandidates ??= []).Add(
+                            (pid, name, SuspendJournal.StartTicks(proc)));
                 }
 
                 if (ActiveGames.ContainsKey(pid)) continue;
@@ -266,7 +294,14 @@ public class ProcessManager : IDisposable
         PruneDeadPids(_appliedMediaZone, alive);
         PruneDeadPids(_appliedBgProcs, alive);
         PruneDeadPids(_notGamePids, alive);
-        PruneDeadPids(_suspendedPids, alive);
+
+        // A suspended process that died must also leave the journal, or the next
+        // launch would try to recover a PID that is free to be reused
+        foreach (var pid in _suspendedPids.Keys)
+        {
+            if (alive.Contains(pid)) continue;
+            if (_suspendedPids.TryRemove(pid, out _)) _journal.Remove(pid);
+        }
 
         return newGames;
     }
@@ -277,18 +312,35 @@ public class ProcessManager : IDisposable
     /// snapshot. Gated on <see cref="PinningEnabled"/> so the pinning-off
     /// state remains a guaranteed no-op.
     /// </summary>
-    private void ReconcileSuspension(List<(int Pid, string Name)>? candidates)
+    private void ReconcileSuspension(List<(int Pid, string Name, long? StartTicks)>? candidates)
     {
         if (PinningEnabled && !ActiveGames.IsEmpty)
         {
             if (candidates is null) return;
-            foreach (var (pid, name) in candidates)
+            foreach (var (pid, name, startTicks) in candidates)
             {
                 if (_suspendedPids.ContainsKey(pid)) continue;
+
+                // Journal first: an entry with no frozen process is harmless
+                // (recovery skips it), a frozen process with no entry is not.
+                // Without a readable start time the entry could not be matched
+                // safely on recovery, so don't suspend at all.
+                if (startTicks is null)
+                {
+                    LogEntry?.Invoke($"[SUSPEND] Skipped {name} (PID {pid}) - " +
+                                     "start time unreadable, cannot journal safely");
+                    continue;
+                }
+                _journal.Add(pid, name, startTicks.Value);
+
                 if (ProcessControl.Suspend(pid))
                 {
                     _suspendedPids[pid] = name;
                     LogEntry?.Invoke($"[SUSPEND] Paused {name} (PID {pid}) - game running");
+                }
+                else
+                {
+                    _journal.Remove(pid);
                 }
             }
         }
@@ -309,6 +361,7 @@ public class ProcessManager : IDisposable
             if (_suspendedPids.TryRemove(pid, out var name))
             {
                 ProcessControl.Resume(pid);
+                _journal.Remove(pid);
                 LogEntry?.Invoke($"[SUSPEND] Resumed {name} (PID {pid})");
             }
         }
@@ -389,10 +442,11 @@ public class ProcessManager : IDisposable
             var (mask, priority) = ResolveGameSettings(_cfg, gameName);
             try { p.ProcessorAffinity = (IntPtr)mask; p.PriorityClass = priority; } catch { }
         }
-        foreach (var proc in SafeGetProcessesByName("firefox").Concat(SafeGetProcessesByName("vlc")))
+        foreach (var proc in SafeGetProcesses())
         {
             using (proc)
             {
+                if (!IsMediaProc(proc.ProcessName)) continue;
                 try
                 {
                     proc.ProcessorAffinity = FirefoxAffinity;
@@ -421,6 +475,9 @@ public class ProcessManager : IDisposable
         _modifiedPids.Clear();
         _notGamePids.Clear();
         _suspendedPids.Clear();
+        // Callers reach here only after RestoreAll has resumed everything, so
+        // any surviving journal entry is stale by definition
+        _journal.Clear();
     }
 
     /// <summary>
@@ -554,11 +611,6 @@ public class ProcessManager : IDisposable
     private static Process? SafeGetProcess(int pid)
     {
         try { return Process.GetProcessById(pid); } catch { return null; }
-    }
-
-    private static IEnumerable<Process> SafeGetProcessesByName(string name)
-    {
-        try { return Process.GetProcessesByName(name); } catch { return []; }
     }
 
     public void Dispose()

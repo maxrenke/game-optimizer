@@ -238,6 +238,52 @@
                 </StackPanel>
             </Expander>
 
+            <!-- Media Zone Processes -->
+            <Expander Header="Media Zone (Second-Monitor Video)" IsExpanded="False"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8" Padding="0,8,0,0">
+                    <TextBlock Style="{StaticResource HelpTextStyle}">
+                        Process names (no .exe) pinned to the Media zone at Normal priority
+                        while gaming - the browser or player you watch on the second monitor.
+                        Unlike throttled processes these keep Normal priority, so video does
+                        not drop frames.
+                    </TextBlock>
+                    <ListView ItemsSource="{x:Bind ViewModel.MediaProcs}" SelectionMode="None"
+                              MaxHeight="120">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind}" VerticalAlignment="Center" FontFamily="Consolas" FontSize="12" />
+                                    <Button Grid.Column="1" Content="&#xE74D;"
+                                            FontFamily="Segoe Fluent Icons" FontSize="12"
+                                            Click="RemoveMediaProc_Click" Tag="{x:Bind}"
+                                            Style="{StaticResource DateTimePickerFlyoutButtonStyle}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox PlaceholderText="processname (no .exe)" Text="{x:Bind ViewModel.NewMediaProc, Mode=TwoWay}" />
+                        <Button Grid.Column="1" Content="Add" Command="{x:Bind ViewModel.AddMediaProcCommand}" />
+                    </Grid>
+                    <ToggleSwitch Header="Reserve a full physical core for media"
+                                  IsOn="{x:Bind ViewModel.ReserveFullCoreForMedia, Mode=TwoWay}"
+                                  OffContent="Media zone gets one SMT thread"
+                                  OnContent="Media zone gets a whole core (costs the game one core)" />
+                    <Button Content="Recalculate zones for this CPU"
+                            Command="{x:Bind ViewModel.RecalculateZonesCommand}"
+                            ToolTipService.ToolTip="Rewrites the three affinity masks above from the detected CPU topology" />
+                </StackPanel>
+            </Expander>
+
             <!-- Pause Apps During Gameplay -->
             <Expander Header="Pause Apps During Gameplay" IsExpanded="False"
                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
