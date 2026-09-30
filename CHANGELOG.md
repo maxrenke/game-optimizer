@@ -17,7 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Suspending frees CPU and disk I/O but no memory - `NtSuspendProcess` stops
   threads while the working set stays mapped, so only a process exit returns its
   pages. Confirmation dialog first; killed PIDs are dropped from the suspend
-  journal so recovery never chases them
+  journal so recovery never chases them. Styled as a destructive action, and
+  its hover lists exactly what would be killed - each app, its instance count,
+  its working set, and the total reclaimable RAM, read live at hover time
 - "Recalculate zones for this CPU" action in Settings - zone detection previously
   only ever ran when the config file was first created
 - GPU clock lock (NVIDIA): pins graphics clocks to max via `nvidia-smi` while a

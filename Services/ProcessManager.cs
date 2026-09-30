@@ -351,6 +351,37 @@ public class ProcessManager : IDisposable
     }
 
     /// <summary>
+    /// What the "Close Apps" button would kill right now: one row per configured
+    /// name that is actually running, with its instance count and total working
+    /// set. Static and read-only so the UI can call it on hover without touching
+    /// any tracking state.
+    /// </summary>
+    public static IReadOnlyList<(string Name, int Count, long Mb)> PreviewFreeRamApps(
+        OptimizerConfig cfg)
+    {
+        var names = new HashSet<string>(cfg.CloseToFreeRam, StringComparer.OrdinalIgnoreCase);
+        if (names.Count == 0) return [];
+
+        var tally = new Dictionary<string, (int Count, long Bytes)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var proc in SafeGetProcesses())
+        {
+            using (proc)
+            {
+                if (proc.Id == Environment.ProcessId) continue;
+                if (!names.Contains(proc.ProcessName)) continue;
+                long ws;
+                try { ws = proc.WorkingSet64; } catch { continue; }
+                tally.TryGetValue(proc.ProcessName, out var cur);
+                tally[proc.ProcessName] = (cur.Count + 1, cur.Bytes + ws);
+            }
+        }
+
+        return [.. tally
+            .Select(kv => (kv.Key, kv.Value.Count, kv.Value.Bytes / (1024 * 1024)))
+            .OrderByDescending(r => r.Item3)];
+    }
+
+    /// <summary>
     /// Terminates every process named in <see cref="OptimizerConfig.CloseToFreeRam"/>
     /// and reports the RAM reclaimed. Destructive and manual - nothing calls this
     /// automatically.

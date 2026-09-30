@@ -41,6 +41,20 @@
 
             <x:Double x:Key="CardRadius">8</x:Double>
 
+            <!-- Destructive action: amber, not red - this kills apps on purpose,
+                 it is not an error state -->
+            <SolidColorBrush x:Key="DangerBackgroundBrush" Color="#7A4A12" />
+            <SolidColorBrush x:Key="DangerBorderBrush"     Color="#D98A2B" />
+
+            <Style x:Key="DangerButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource DangerBackgroundBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource DangerBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Foreground" Value="#FFF3E0" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Padding" Value="14,7" />
+            </Style>
+
             <!-- Unified card container -->
             <Style x:Key="CardStyle" TargetType="Border">
                 <Setter Property="CornerRadius" Value="8" />

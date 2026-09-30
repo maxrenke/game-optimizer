@@ -1,4 +1,6 @@
+using GameOptimizer.Services;
 using GameOptimizer.ViewModels;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Shapes;
@@ -214,15 +216,54 @@ public sealed partial class MainPage : Page
     private void FlushRamBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         => App.OptimizerService?.FlushStandbyRam();
 
-    private async void CloseAppsBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    // Built on hover so the numbers are live; a label on the button face would
+    // mean enumerating every process once a second just to keep it current.
+    private void CloseAppsTip_Opened(object sender, RoutedEventArgs e)
     {
-        var names = string.Join(", ", App.Config.CloseToFreeRam);
+        if (App.Config.CloseToFreeRam.Count == 0)
+        {
+            CloseAppsTip.Content = "No apps configured. Add names under CloseToFreeRam in config.json.";
+            return;
+        }
+
+        var rows = ProcessManager.PreviewFreeRamApps(App.Config);
+        if (rows.Count == 0)
+        {
+            CloseAppsTip.Content = "Would close: " +
+                string.Join(", ", App.Config.CloseToFreeRam) +
+                Environment.NewLine + Environment.NewLine + "None are running right now.";
+            return;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Closing these frees RAM now:");
+        foreach (var (name, count, mb) in rows)
+            sb.AppendLine($"  {name}  x{count}  {mb:N0} MB");
+        sb.AppendLine();
+        sb.AppendLine($"Total: {rows.Sum(r => r.Mb):N0} MB");
+        sb.AppendLine();
+        sb.Append("Suspending these frees CPU and disk I/O but no memory - ");
+        sb.Append("only closing returns their pages.");
+        CloseAppsTip.Content = sb.ToString();
+    }
+
+    private async void CloseAppsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var rows = ProcessManager.PreviewFreeRamApps(App.Config);
+        if (rows.Count == 0)
+        {
+            App.OptimizerService?.CloseFreeRamApps();   // logs "nothing to close"
+            return;
+        }
+
+        var list = string.Join(Environment.NewLine,
+            rows.Select(r => $"  {r.Name}  x{r.Count}  {r.Mb:N0} MB"));
+
         var dialog = new ContentDialog
         {
-            Title = "Close these apps?",
-            Content = $"This will terminate: {names}\n\n" +
-                      "Unsaved work in them is lost and they will not restart on their own. " +
-                      "Suspending frees CPU and disk I/O but no memory - only closing returns RAM.",
+            Title = $"Close these apps? ({rows.Sum(r => r.Mb):N0} MB)",
+            Content = list + Environment.NewLine + Environment.NewLine +
+                      "Unsaved work in them is lost and they will not restart on their own.",
             PrimaryButtonText = "Close apps",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,

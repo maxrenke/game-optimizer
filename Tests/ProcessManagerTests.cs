@@ -318,4 +318,59 @@ public class ProcessManagerTests
         var (_, priority) = ProcessManager.ResolveGameSettings(cfg, "eldenring");
         Assert.Equal(System.Diagnostics.ProcessPriorityClass.High, priority);
     }
+
+    [Fact]
+    public void PreviewFreeRamApps_EmptyConfigList_ReturnsNothing()
+    {
+        var cfg = new OptimizerConfig { CloseToFreeRam = [] };
+        Assert.Empty(ProcessManager.PreviewFreeRamApps(cfg));
+    }
+
+    [Fact]
+    public void PreviewFreeRamApps_NameThatIsNotRunning_ReturnsNothing()
+    {
+        var cfg = new OptimizerConfig { CloseToFreeRam = ["definitely-not-a-real-process"] };
+        Assert.Empty(ProcessManager.PreviewFreeRamApps(cfg));
+    }
+
+    [Fact]
+    public void PreviewFreeRamApps_ReportsCountAndMemoryForARunningProcess()
+    {
+        var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", "/c timeout /t 30 /nobreak")
+        {
+            CreateNoWindow = true,
+            UseShellExecute = false,
+        });
+        Assert.NotNull(child);
+
+        try
+        {
+            var cfg = new OptimizerConfig { CloseToFreeRam = [child!.ProcessName] };
+            var rows = ProcessManager.PreviewFreeRamApps(cfg);
+
+            var row = Assert.Single(rows.Where(r =>
+                r.Name.Equals(child.ProcessName, StringComparison.OrdinalIgnoreCase)));
+            Assert.True(row.Count >= 1, "the spawned child should be counted");
+            Assert.True(row.Mb >= 0, "working set should be reported");
+        }
+        finally
+        {
+            try { child!.Kill(entireProcessTree: true); } catch { }
+            child!.Dispose();
+        }
+    }
+
+    [Fact]
+    public void PreviewFreeRamApps_NeverIncludesTheOptimizerItself()
+    {
+        var self = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+        var cfg = new OptimizerConfig { CloseToFreeRam = [self] };
+
+        // Only this test host runs under that name, and it is excluded by PID,
+        // so nothing should come back - the button must not kill the optimizer
+        Assert.DoesNotContain(ProcessManager.PreviewFreeRamApps(cfg),
+            r => r.Count > 0 && r.Name.Equals(self, StringComparison.OrdinalIgnoreCase)
+                 && System.Diagnostics.Process.GetProcessesByName(self).Length == 1);
+    }
 }
