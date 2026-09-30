@@ -9,7 +9,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.SetIcon("Assets/AppIcon.ico");
+        // Absolute path: a relative one resolves against the working directory,
+        // which is not the exe folder unless the launcher happens to set it
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         Title = "Gaming Optimizer v4";
 
         AppWindow.Closing += (_, args) =>

@@ -58,6 +58,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   DiagTrack, and resets GPU clocks
 
 ### Fixed
+- Taskbar, Alt-Tab and Explorer showed the generic shell icon: the project had
+  no `ApplicationIcon`, so the exe carried no Win32 icon resource. For an
+  unpackaged app the shell reads that resource, not `AppWindow.SetIcon`, which
+  only dresses the window itself
+- `AppWindow.SetIcon` used a path relative to the working directory rather than
+  the exe folder, so the window icon silently failed whenever the app was
+  launched from anywhere else
 - Suspended apps are no longer stranded frozen by a crash. Every cleanup path
   (`ReleasePinning`, `ResumeAllSuspended`, `Dispose`) needed managed code to run
   at shutdown, and a WinUI stowed exception (`0xC000027B`) terminates the process
