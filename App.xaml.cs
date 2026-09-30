@@ -133,6 +133,11 @@ public class OptimizerServiceWrapper(Services.OptimizerService inner)
         Task.Run(() => inner.ResetAll());
     }
 
+    public void CloseFreeRamApps()
+    {
+        Task.Run(() => inner.CloseFreeRamApps());
+    }
+
     public void FlushStandbyRam()
     {
         Task.Run(() => inner.FlushStandbyRam());

@@ -108,7 +108,8 @@ public static class MemoryService
         finally { CloseHandle(token); }
     }
 
-    private static ulong AvailablePhysicalBytes()
+    /// <summary>Free physical RAM in bytes, or 0 if it cannot be read.</summary>
+    public static ulong AvailablePhysicalBytes()
     {
         var status = new MemoryStatusEx { dwLength = (uint)Marshal.SizeOf<MemoryStatusEx>() };
         return GlobalMemoryStatusEx(ref status) ? status.ullAvailPhys : 0;

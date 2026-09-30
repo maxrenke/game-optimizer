@@ -213,4 +213,23 @@ public sealed partial class MainPage : Page
 
     private void FlushRamBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
         => App.OptimizerService?.FlushStandbyRam();
+
+    private async void CloseAppsBtn_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        var names = string.Join(", ", App.Config.CloseToFreeRam);
+        var dialog = new ContentDialog
+        {
+            Title = "Close these apps?",
+            Content = $"This will terminate: {names}\n\n" +
+                      "Unsaved work in them is lost and they will not restart on their own. " +
+                      "Suspending frees CPU and disk I/O but no memory - only closing returns RAM.",
+            PrimaryButtonText = "Close apps",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        App.OptimizerService?.CloseFreeRamApps();
+    }
 }

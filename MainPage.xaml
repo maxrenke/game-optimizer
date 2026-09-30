@@ -552,6 +552,13 @@
                         <TextBlock Text="Flush RAM" FontSize="12" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <Button x:Name="CloseAppsBtn" Click="CloseAppsBtn_Click"
+                        ToolTipService.ToolTip="Terminate the configured RAM-hog apps (suspending them frees CPU, not memory)">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE8BB;" FontSize="13" />
+                        <TextBlock Text="Close Apps" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
             <Button Grid.Column="2" x:Name="ExitBtn" Click="ExitBtn_Click" Style="{StaticResource AccentButtonStyle}">
                 <StackPanel Orientation="Horizontal" Spacing="5">

@@ -200,6 +200,19 @@ public class OptimizerService : IDisposable
             : "[SYS] Standby RAM flush failed (needs admin)");
     }
 
+    /// <summary>
+    /// Terminates the configured RAM-hog apps and logs the result. Manual only.
+    /// Suspending those apps frees CPU and disk I/O but no memory - only an exit
+    /// releases the working set.
+    /// </summary>
+    public void CloseFreeRamApps()
+    {
+        var (killed, freedMb) = _pm.CloseFreeRamApps();
+        AddLog(killed > 0
+            ? $"[SYS] Closed {killed} process(es) - freed {freedMb} MB"
+            : "[SYS] No configured apps were running to close");
+    }
+
     // Cached so the per-second snapshot path never touches the filesystem.
     // Refreshed on first read and whenever a report is written.
     public int ReportCount()

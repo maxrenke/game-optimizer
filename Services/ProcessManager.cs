@@ -351,6 +351,62 @@ public class ProcessManager : IDisposable
     }
 
     /// <summary>
+    /// Terminates every process named in <see cref="OptimizerConfig.CloseToFreeRam"/>
+    /// and reports the RAM reclaimed. Destructive and manual - nothing calls this
+    /// automatically.
+    /// <para>
+    /// This exists because suspending frees no memory: <c>NtSuspendProcess</c>
+    /// stops threads but the working set stays mapped, so a frozen app still
+    /// holds its RAM (Windows only trims those pages later, under pressure).
+    /// Only a process exit returns them, which is why this kills rather than
+    /// freezes. Killed PIDs are dropped from the suspend journal so recovery
+    /// never tries to resume them.
+    /// </para>
+    /// </summary>
+    /// <returns>How many processes were terminated, and the MB freed.</returns>
+    public (int Killed, long FreedMb) CloseFreeRamApps()
+    {
+        var names = new HashSet<string>(_cfg.CloseToFreeRam, StringComparer.OrdinalIgnoreCase);
+        if (names.Count == 0) return (0, 0);
+
+        var before = MemoryService.AvailablePhysicalBytes();
+
+        var victims = new List<Process>();
+        foreach (var proc in SafeGetProcesses())
+        {
+            if (proc.Id == Environment.ProcessId || !names.Contains(proc.ProcessName))
+            {
+                proc.Dispose();
+                continue;
+            }
+            victims.Add(proc);
+        }
+
+        var killed = 0;
+        foreach (var p in victims)
+        {
+            try { p.Kill(); killed++; }
+            catch { }   // already gone (killed as someone's child), or access denied
+
+            // A dead PID must not stay in the journal or the suspend tracking,
+            // or recovery would chase a number the OS is free to hand out again
+            if (_suspendedPids.TryRemove(p.Id, out _)) _journal.Remove(p.Id);
+            _modifiedPids.TryRemove(p.Id, out _);
+        }
+
+        // Pages are released on exit, not on the Kill call, so measure after
+        foreach (var p in victims)
+        {
+            try { p.WaitForExit(2000); } catch { }
+            p.Dispose();
+        }
+
+        var after = MemoryService.AvailablePhysicalBytes();
+        var freed = (long)after - (long)before;
+        return (killed, freed > 0 ? freed / (1024 * 1024) : 0);
+    }
+
+    /// <summary>
     /// Resumes every process this instance suspended. Safe to call at any time;
     /// invoked automatically when no game is active and on every teardown path.
     /// </summary>

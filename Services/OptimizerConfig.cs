@@ -80,6 +80,15 @@ public class OptimizerConfig
     ];
 
     /// <summary>
+    /// Apps terminated by the "Close Apps" button to reclaim RAM. Unlike
+    /// <see cref="SuspendDuringGame"/> this is destructive and manual: suspending
+    /// stops threads but leaves the working set resident, so it frees CPU and
+    /// disk I/O but not memory. Only a process exit returns its pages.
+    /// </summary>
+    public List<string> CloseToFreeRam { get; set; } =
+        ["onedrive", "onedrive.sync.service"];
+
+    /// <summary>
     /// Services stopped for the duration of a session and restarted on teardown
     /// (StartType is never changed - identical to the built-in SysMain handling).
     /// Defaults to the Windows Search indexer and telemetry, both common sources
@@ -160,6 +169,14 @@ public class OptimizerConfig
         // Normalize throttle/service lists - entries typed with ".exe" or stray
         // whitespace would otherwise never match a process or service name
         ExtraThrottledProcs = ExtraThrottledProcs
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim()
+                .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)
+                .ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+        CloseToFreeRam = CloseToFreeRam
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim()
                 .Replace(".exe", "", StringComparison.OrdinalIgnoreCase)

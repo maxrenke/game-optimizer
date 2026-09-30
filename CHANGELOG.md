@@ -12,6 +12,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - "Reserve a full physical core for media" option, for watching video on a second
   monitor while gaming: sizes the media and background zones at a whole physical
   core (an SMT sibling pair) each rather than one starved hyperthread
+- "Close Apps" button on the dashboard: terminates the apps listed in
+  `CloseToFreeRam` (default: both OneDrive processes) and logs the RAM reclaimed.
+  Suspending frees CPU and disk I/O but no memory - `NtSuspendProcess` stops
+  threads while the working set stays mapped, so only a process exit returns its
+  pages. Confirmation dialog first; killed PIDs are dropped from the suspend
+  journal so recovery never chases them
 - "Recalculate zones for this CPU" action in Settings - zone detection previously
   only ever ran when the config file was first created
 - GPU clock lock (NVIDIA): pins graphics clocks to max via `nvidia-smi` while a

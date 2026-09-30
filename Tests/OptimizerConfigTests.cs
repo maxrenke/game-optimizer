@@ -426,6 +426,25 @@ public class OptimizerConfigTests
     }
 
     [Fact]
+    public void Validate_CloseToFreeRam_NormalizedAndDeduplicated()
+    {
+        var cfg = new OptimizerConfig
+        {
+            CloseToFreeRam = ["  OneDrive.EXE ", "onedrive", "", "Claude"],
+        };
+        cfg.Validate();
+        Assert.Equal(["onedrive", "claude"], cfg.CloseToFreeRam);
+    }
+
+    [Fact]
+    public void DefaultConfig_CloseToFreeRam_CoversBothOneDriveProcesses()
+    {
+        var cfg = new OptimizerConfig();
+        Assert.Contains("onedrive", cfg.CloseToFreeRam);
+        Assert.Contains("onedrive.sync.service", cfg.CloseToFreeRam);
+    }
+
+    [Fact]
     public void DefaultConfig_MediaProcs_CoverCommonPlayers()
     {
         var cfg = new OptimizerConfig();
